@@ -14,6 +14,7 @@ function Dashboard() {
       return;
     }
     fetchTrips();
+    // eslint-disable-next-line
   }, []);
 
   const fetchTrips = async () => {
