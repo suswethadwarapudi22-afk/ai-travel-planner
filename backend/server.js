@@ -20,13 +20,25 @@ app.get('/', (req, res) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI)
+console.log('All env vars: - server.js:23', {
+  MONGO_URI: process.env.MONGO_URI ? 'EXISTS' : 'MISSING',
+  PORT: process.env.PORT ? 'EXISTS' : 'MISSING',
+  JWT_SECRET: process.env.JWT_SECRET ? 'EXISTS' : 'MISSING',
+});
+
+const mongoUri = process.env.MONGO_URI;
+if (!mongoUri) {
+  console.error('MONGO_URI is not set! - server.js:31');
+  process.exit(1);
+}
+
+mongoose.connect(mongoUri)
   .then(() => {
-    console.log('✅ MongoDB Connected! - server.js:25');
-    app.listen(process.env.PORT, () => {
-      console.log(`✅ Server running on port ${process.env.PORT} - server.js:27`);
+    console.log('✅ MongoDB Connected! - server.js:37');
+    app.listen(process.env.PORT || 5000, () => {
+      console.log(`✅ Server running on port ${process.env.PORT || 5000} - server.js:39`);
     });
   })
   .catch((err) => {
-    console.log('❌ MongoDB connection error: - server.js:31', err);
+    console.log('❌ MongoDB connection error: - server.js:43', err);
   });
