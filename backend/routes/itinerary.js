@@ -8,7 +8,7 @@ router.post('/generate', auth, async (req, res) => {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
     const prompt = `You are an expert travel planner for students in India. Plan a ${days}-day trip from ${source} to ${destination}. Budget: Rs.${budget} for ${groupSize} people. Transport: ${transport}. Interests: ${interests.join(', ')}. Give detailed day-wise itinerary with ## Day-wise Itinerary, ## Budget Breakdown, ## Top Hotels, ## Top Restaurants, ## Hidden Gems, ## Safety Tips, ## Local Guides. Emergency: 112, Tourist helpline: 1364.`;
 
-    const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    const models = ['gemini-2.0-flash', 'gemini-2.0-pro', 'gemini-pro'];
     let itinerary = null;
     for (const model of models) {
       try {
