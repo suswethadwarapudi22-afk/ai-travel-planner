@@ -5,131 +5,102 @@ const axios = require('axios');
 
 router.post('/generate', auth, async (req, res) => {
   try {
-    const {
-      source, destination, budget,
-      days, interests, groupSize, transport
-    } = req.body;
+    const { source, destination, budget, days, interests, groupSize, transport } = req.body;
 
-  const prompt = `You are an expert travel planner for students in India.
-
+    const prompt = `You are an expert travel planner for students in India.
 Plan a ${days}-day trip from ${source} to ${destination}.
 Budget: ₹${budget} for ${groupSize} people
 Transport: ${transport}
 Interests: ${interests.join(', ')}
 
-IMPORTANT FORMATTING RULES:
-- Use VERY short, compact bullet points in "label: value" format
-- NO long paragraphs or explanations
-- Each bullet should be 1 line, maximum 10-12 words
-- Use simple "-" for bullets, NOT asterisks
-- Example format:
-  - train: Visakhapatnam to Madgaon
-  - journey time: 24-28 hrs
-  - day 1 morning: arrive, check into hostel
-  - day 1 afternoon: Vagator beach, lunch at shack (₹150)
-  - hotel: Woke Hostel, Anjuna - ₹500/night
-
-Structure the response with these sections (use simple headings with ##):
-
+Give a detailed day-wise itinerary with:
 ## Day-wise Itinerary
-For EACH day, add a subheading "### Day X" (capital, e.g. ### Day 1), then list compact bullets for that day only (morning/afternoon/evening). Do not mix days together.
+### Day 1, Day 2... etc with morning/afternoon/evening activities
 
 ## Budget Breakdown
-- hotel: ₹X
-- food: ₹X
-- transport: ₹X
-- tickets: ₹X
-- total: ₹X
+- hotel, food, transport, tickets, total
 
 ## Top Hotels
-(5 compact lines: name - price - area)
+5 budget hotels with price and area
 
-## Top Restaurants
-(5 compact lines: name - specialty - price range)
+## Top Restaurants  
+5 restaurants with specialty and price range
 
 ## Hidden Gems & Tips
-(short bullet tips)
-
 ## Safety Tips
-(short bullet tips)
-
 ## Weather & Clothing
-- weather: short description
-- pack: list items briefly
-
 ## Documents Needed
-(short bullet list)
-
-## First Aid Kit
-(short bullet list)
-
-## Electronics to Carry
-(short bullet list)
-
 ## Local Guides & Helplines
-- national tourist helpline: 1364 (24x7, multilingual)
-- emergency number: 112
-- local police helpline: [give the actual state's number if known, else say "dial 100"]
-- how to book verified guide: [1 line - e.g. via state tourism website/app or hotel reception]
-- state tourism office: [name + general contact method if known]
+- emergency: 112
+- tourist helpline: 1364
 - women helpline: 1091
 
-Keep EVERYTHING extremely concise. No fluff, no long sentences. For Local Guides & Helplines, only use real, publicly known official numbers - do not invent names or personal phone numbers.`;
-const callGemini = async (attempt = 1) => {
-      try {
-        const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          { contents: [{ parts: [{ text: prompt }] }] },
-          { headers: { 'content-type': 'application/json' }, timeout: 30000 }
-        );
-        const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error('Empty response from Gemini');
-        return text;
-      } catch (err) {
-        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:89`, err.message);
-        if (attempt < 3) {
-          await new Promise((r) => setTimeout(r, 1500 * attempt)); // wait 1.5s, 3s
-          return callGemini(attempt + 1);
-        }
-        throw err;
-      }
-    };
+Keep everything concise and practical for students.`;
 
-    const itinerary = await callGemini();
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      },
+      {
+        headers: {
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const itinerary = response.data.content[0].text;
     res.json({ itinerary });
-   
+
   } catch (err) {
-    console.error('CLAUDE API ERROR: - itinerary.js:102', JSON.stringify(err.response?.data, null, 2));
+    console.error('Itinerary error: - itinerary.js:61', err.response?.data || err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
+
 router.post('/ask', auth, async (req, res) => {
   try {
     const { question, tripDetails, itinerary } = req.body;
 
-    const prompt = `You are a helpful travel assistant for a student trip.
-Trip: ${tripDetails.source} to ${tripDetails.destination}, ${tripDetails.days} days, budget ₹${tripDetails.budget}, ${tripDetails.groupSize} people, transport ${tripDetails.transport}.
+    const prompt = `You are a helpful travel assistant.
+Trip: ${tripDetails.source} to ${tripDetails.destination}, ${tripDetails.days} days, budget ₹${tripDetails.budget}, ${tripDetails.groupSize} people.
 
-Existing itinerary summary (for context, don't repeat it):
-${itinerary.substring(0, 3000)}
+Existing itinerary: ${itinerary.substring(0, 2000)}
 
 User question: "${question}"
 
-Answer in VERY short bullet points using "-" only, label: value format, no asterisks, no long paragraphs. If asked for more hotels/restaurants/places, give 5 NEW ones not already mentioned, format as: name - price/specialty - area.`;
+Answer briefly in bullet points.`;
 
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }] }] },
-      { headers: { 'content-type': 'application/json' } }
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      },
+      {
+        headers: {
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        }
+      }
     );
 
-    const answer = response.data.candidates[0].content.parts[0].text;
+    const answer = response.data.content[0].text;
     res.json({ answer });
+
   } catch (err) {
-    console.error('ASK ERROR: - itinerary.js:129', JSON.stringify(err.response?.data, null, 2));
+    console.error('Ask error: - itinerary.js:99', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
+
 router.get('/weather/:city', auth, async (req, res) => {
   try {
     const city = req.params.city;
@@ -146,14 +117,11 @@ router.get('/weather/:city', auth, async (req, res) => {
       icon: item.weather[0].icon,
       wind: item.wind.speed,
     }));
-    res.json({
-      city: data.city.name,
-      country: data.city.country,
-      forecasts,
-    });
+    res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:155', err.message);
+    console.error('Weather error: - itinerary.js:122', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
+
 module.exports = router;
