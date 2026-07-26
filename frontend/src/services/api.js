@@ -1,8 +1,14 @@
 import axios from 'axios';
 
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// Wake up the server before making requests
+export const wakeServer = () => 
+  fetch(BASE_URL.replace('/api', '/')).catch(() => {});
+
 const API = axios.create({ 
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
-  timeout: 120000
+  baseURL: BASE_URL,
+  timeout: 300000  // 5 minutes
 });
 
 API.interceptors.request.use((req) => {
