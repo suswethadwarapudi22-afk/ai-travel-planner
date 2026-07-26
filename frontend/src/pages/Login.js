@@ -1,7 +1,6 @@
-import { login, wakeServer } from '../services/api';
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { login } from '../services/api';
+import { login, wakeServer } from '../services/api';
 
 function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -10,27 +9,24 @@ function Login() {
   const [statusMsg, setStatusMsg] = useState('');
   const navigate = useNavigate();
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
-  setStatusMsg('Waking up server... please wait up to 60 seconds');
-  
-  // Ping server first
-  await wakeServer();
-  
-  setStatusMsg('Logging in...');
-  try {
-    const res = await login(form);
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('user', JSON.stringify(res.data.user));
-    navigate('/dashboard');
-  } catch (err) {
-    setError(err.response?.data?.message || 'Login failed. Please try again.');
-  }
-  setLoading(false);
-  setStatusMsg('');
-};
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setStatusMsg('Connecting to server...');
+    await wakeServer();
+    setStatusMsg('Logging in...');
+    try {
+      const res = await login(form);
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Login failed. Please try again.');
+    }
+    setLoading(false);
+    setStatusMsg('');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
