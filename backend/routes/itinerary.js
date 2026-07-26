@@ -6,59 +6,27 @@ const axios = require('axios');
 router.post('/generate', auth, async (req, res) => {
   try {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
+    const prompt = `You are an expert travel planner for students in India. Plan a ${days}-day trip from ${source} to ${destination}. Budget: Rs.${budget} for ${groupSize} people. Transport: ${transport}. Interests: ${interests.join(', ')}. Give detailed day-wise itinerary with ## Day-wise Itinerary, ## Budget Breakdown, ## Top Hotels, ## Top Restaurants, ## Hidden Gems, ## Safety Tips, ## Local Guides. Emergency: 112, Tourist helpline: 1364.`;
 
-    const prompt = `You are an expert travel planner for students in India.
-Plan a ${days}-day trip from ${source} to ${destination}.
-Budget: ₹${budget} for ${groupSize} people
-Transport: ${transport}
-Interests: ${interests.join(', ')}
-
-Give a detailed day-wise itinerary with:
-## Day-wise Itinerary
-### Day 1, Day 2... etc with morning/afternoon/evening activities
-
-## Budget Breakdown
-- hotel, food, transport, tickets, total
-
-## Top Hotels
-5 budget hotels with price and area
-
-## Top Restaurants  
-5 restaurants with specialty and price range
-
-## Hidden Gems & Tips
-## Safety Tips
-## Weather & Clothing
-## Documents Needed
-## Local Guides & Helplines
-- emergency: 112
-- tourist helpline: 1364
-- women helpline: 1091
-
-Keep everything concise and practical for students.`;
-
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }]
-      },
-      {
-        headers: {
-          'x-api-key': process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        },
-        timeout: 30000
+    const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    let itinerary = null;
+    for (const model of models) {
+      try {
+        const response = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          { contents: [{ parts: [{ text: prompt }] }] },
+          { headers: { 'content-type': 'application/json' }, timeout: 30000 }
+        );
+        const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) { itinerary = text; console.log(`Success: ${model} - itinerary.js:21`); break; }
+      } catch (err) {
+        console.error(`${model} failed: - itinerary.js:23`, err.response?.data?.error?.message || err.message);
       }
-    );
-
-    const itinerary = response.data.content[0].text;
+    }
+    if (!itinerary) throw new Error('All models failed');
     res.json({ itinerary });
-
   } catch (err) {
-    console.error('Itinerary error: - itinerary.js:61', err.response?.data || err.message);
+    console.error('Error: - itinerary.js:29', err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
@@ -66,37 +34,15 @@ Keep everything concise and practical for students.`;
 router.post('/ask', auth, async (req, res) => {
   try {
     const { question, tripDetails, itinerary } = req.body;
-
-    const prompt = `You are a helpful travel assistant.
-Trip: ${tripDetails.source} to ${tripDetails.destination}, ${tripDetails.days} days, budget ₹${tripDetails.budget}, ${tripDetails.groupSize} people.
-
-Existing itinerary: ${itinerary.substring(0, 2000)}
-
-User question: "${question}"
-
-Answer briefly in bullet points.`;
-
+    const prompt = `Travel assistant for trip from ${tripDetails.source} to ${tripDetails.destination}. Context: ${itinerary.substring(0, 1000)}. Question: "${question}". Answer briefly.`;
     const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        messages: [{ role: 'user', content: prompt }]
-      },
-      {
-        headers: {
-          'x-api-key': process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        }
-      }
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      { contents: [{ parts: [{ text: prompt }] }] },
+      { headers: { 'content-type': 'application/json' } }
     );
-
-    const answer = response.data.content[0].text;
+    const answer = response.data.candidates[0].content.parts[0].text;
     res.json({ answer });
-
   } catch (err) {
-    console.error('Ask error: - itinerary.js:99', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
@@ -109,17 +55,12 @@ router.get('/weather/:city', auth, async (req, res) => {
     );
     const data = response.data;
     const forecasts = data.list.map((item) => ({
-      time: item.dt_txt,
-      temp: Math.round(item.main.temp),
-      feels: Math.round(item.main.feels_like),
-      humidity: item.main.humidity,
-      description: item.weather[0].description,
-      icon: item.weather[0].icon,
-      wind: item.wind.speed,
+      time: item.dt_txt, temp: Math.round(item.main.temp),
+      feels: Math.round(item.main.feels_like), humidity: item.main.humidity,
+      description: item.weather[0].description, icon: item.weather[0].icon, wind: item.wind.speed,
     }));
     res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:122', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
