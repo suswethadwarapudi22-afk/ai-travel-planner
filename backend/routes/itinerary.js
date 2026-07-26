@@ -118,7 +118,7 @@ User question: "${question}"
 Answer in VERY short bullet points using "-" only, label: value format, no asterisks, no long paragraphs. If asked for more hotels/restaurants/places, give 5 NEW ones not already mentioned, format as: name - price/specialty - area.`;
 
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       { contents: [{ parts: [{ text: prompt }] }] },
       { headers: { 'content-type': 'application/json' } }
     );
