@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { saveTrip, askItinerary, getWeather } from '../services/api';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function parseSections(text) {
@@ -351,7 +352,7 @@ const normalizeCity = (city) => {
                 <div key={i} className="border-t border-gray-100 pt-3">
                   <p className="text-sm font-semibold text-blue-600 mb-1">🙋 {item.question}</p>
                   <div className="prose prose-sm max-w-none text-gray-700 prose-li:my-0.5 prose-strong:text-gray-900">
-                    <ReactMarkdown>{item.answer}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.answer}</ReactMarkdown>
                   </div>
                 </div>
               ))}
@@ -473,7 +474,7 @@ const normalizeCity = (city) => {
                         </div>
                       ) : (
                         <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-headings:font-bold prose-h3:text-sm prose-h3:uppercase prose-h3:mt-3 prose-h3:mb-1 prose-li:my-0.5 prose-ul:my-1 prose-strong:text-gray-900 prose-p:my-1">
-                          <ReactMarkdown>{section.content}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
                         </div>
                       )}
                     </div>
