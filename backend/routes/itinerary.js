@@ -41,7 +41,7 @@ Keep everything concise and practical for students.`;
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'openrouter/auto',
+        model: 'google/gemma-4-31b-it:free',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 2000
       },
