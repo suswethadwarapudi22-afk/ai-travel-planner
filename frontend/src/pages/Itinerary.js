@@ -359,132 +359,93 @@ const normalizeCity = (city) => {
             </div>
           )}
         </div>
+        {/* AI-Generated Itinerary - Separate Cards */}
+<div className="space-y-4">
+  <div className="flex justify-between items-center">
+    <h3 className="text-xl font-bold text-gray-800">Your AI Trip Plan 🤖</h3>
+    <button
+      onClick={handleSave}
+      disabled={saved}
+      className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60"
+    >
+      {saved ? '✓ Saved' : '💾 Save Trip'}
+    </button>
+  </div>
 
-        {/* AI-Generated Itinerary */}
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-gray-800">Your AI-Generated Itinerary 🤖</h3>
-            <button
-              onClick={handleSave}
-              disabled={saved}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60"
-            >
-              {saved ? '✓ Saved' : '💾 Save Trip'}
-            </button>
-          </div>
+  {parseSections(itinerary).map((section, i) => {
+    const sectionColors = {
+      'Day-wise Itinerary': 'border-blue-400 bg-blue-50',
+      'Top Restaurants': 'border-orange-400 bg-orange-50',
+      'Hidden Gems & Tips': 'border-teal-400 bg-teal-50',
+      'Top Hotels': 'border-purple-400 bg-purple-50',
+      'Budget Breakdown': 'border-green-400 bg-green-50',
+      'Weather & Clothing': 'border-yellow-400 bg-yellow-50',
+      'Documents Needed': 'border-blue-300 bg-blue-50',
+      'Electronics to Carry': 'border-indigo-400 bg-indigo-50',
+      'First Aid Kit': 'border-red-400 bg-red-50',
+      'Safety Tips': 'border-red-300 bg-red-50',
+      'Local Guides & Helplines': 'border-teal-300 bg-teal-50',
+    };
+    const headerColors = {
+      'Day-wise Itinerary': 'bg-blue-600',
+      'Top Restaurants': 'bg-orange-500',
+      'Hidden Gems & Tips': 'bg-teal-600',
+      'Top Hotels': 'bg-purple-600',
+      'Budget Breakdown': 'bg-green-600',
+      'Weather & Clothing': 'bg-yellow-500',
+      'Documents Needed': 'bg-blue-500',
+      'Electronics to Carry': 'bg-indigo-600',
+      'First Aid Kit': 'bg-red-500',
+      'Safety Tips': 'bg-red-600',
+      'Local Guides & Helplines': 'bg-teal-700',
+    };
+    const borderColor = sectionColors[section.title] || 'border-gray-300 bg-gray-50';
+    const headerColor = headerColors[section.title] || 'bg-gray-600';
 
-          <div className="space-y-3">
-            {parseSections(itinerary).map((section, i) => {
-              const isOpen = openSections[section.title];
-              return (
-                <div key={i} className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
-                  <button
-                    onClick={() => toggleSection(section.title)}
-                    className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-100 transition"
-                  >
-                    <span className="text-base font-bold text-gray-900 flex items-center gap-2">
-                      <span>{SECTION_ICONS[section.title] || '📌'}</span>
-                      {section.title}
-                    </span>
-                    <span className="text-gray-400 text-xl">{isOpen ? '−' : '+'}</span>
-                  </button>
-                  {isOpen && (
-                    <div className="px-5 pb-5">
-                      {section.title === 'Budget Breakdown' && (() => {
-                        const { data, total } = parseBudget(section.content);
-                        const userBudget = Number(tripDetails.budget);
-                        const overBudget = total > userBudget;
-                        return (
-                          <div className="mb-4">
-                            <div className="flex flex-col items-center mb-3">
-                              <ResponsiveContainer width="100%" height={300}>
-                                <PieChart>
-                                  <Pie
-                                    data={data}
-                                    dataKey="value"
-                                    nameKey="name"
-                                    cx="50%"
-                                    cy="45%"
-                                    outerRadius={85}
-                                    labelLine={false}
-                                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                                  >
-                                    {data.map((entry, idx) => (
-                                      <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip formatter={(value, name) => [`₹${value}`, name]} />
-                                  <Legend
-                                    layout="horizontal"
-                                    verticalAlign="bottom"
-                                    formatter={(value, entry) => `${value}: ₹${entry.payload.value}`}
-                                    wrapperStyle={{ fontSize: '12px', lineHeight: '20px' }}
-                                  />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <div className={`rounded-lg p-3 text-sm font-medium text-center ${overBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                              {overBudget
-                                ? `⚠️ Estimated total ₹${total} exceeds your budget of ₹${userBudget} by ₹${total - userBudget}`
-                                : `✅ Estimated total ₹${total} fits within your budget of ₹${userBudget} (₹${userBudget - total} to spare)`}
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {(section.title.includes('Top Hotels') || section.title.includes('Top Restaurants')) ? (
-                        <div className="space-y-2">
-                          {parseListItems(section.content).map((item, idx) => (
-                            <div key={idx} className="bg-white rounded-lg p-3 border border-gray-100">
-                              <p className="font-semibold text-gray-900">{item.name}</p>
-                              {item.rest && <p className="text-sm text-gray-500">{item.rest}</p>}
-                              <a
-                                href={`https://www.google.com/search?q=${encodeURIComponent(item.name + ' ' + tripDetails.destination)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 text-sm font-medium hover:underline inline-flex items-center gap-1 mt-1"
-                              >
-                                🔗 Photos, reviews & contact
-                              </a>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (section.title === 'Day-wise Itinerary' || section.title === 'Hidden Gems & Tips') ? (
-                        <div className="space-y-1">
-                          {parseDayLines(section.content).map((line, idx) =>
-                            line.type === 'heading' ? (
-                              <h4 key={idx} className="font-bold text-gray-900 uppercase text-sm mt-3 mb-1">
-                                {line.text}
-                              </h4>
-                            ) : (
-                              <div key={idx} className="flex items-start justify-between gap-2 py-0.5">
-                                <span className="text-gray-700 text-sm">• {line.text}</span>
-                                <a
-                                  href={`https://www.google.com/search?q=${encodeURIComponent(line.text + ' ' + tripDetails.destination)}&tbm=isch`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-500 text-sm flex-shrink-0"
-                                  title="View photos"
-                                >
-                                  📷
-                                </a>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      ) : (
-                        <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-headings:font-bold prose-h3:text-sm prose-h3:uppercase prose-h3:mt-3 prose-h3:mb-1 prose-li:my-0.5 prose-ul:my-1 prose-strong:text-gray-900 prose-p:my-1">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+    return (
+      <div key={i} className={`rounded-2xl border-2 ${borderColor} overflow-hidden shadow-sm`}>
+        <div className={`${headerColor} px-5 py-3 flex items-center gap-2`}>
+          <span className="text-xl">{SECTION_ICONS[section.title] || '📌'}</span>
+          <h3 className="text-white font-bold text-base">{section.title}</h3>
+        </div>
+        <div className="p-5">
+          {section.title === 'Budget Breakdown' && (() => {
+            const { data, total } = parseBudget(section.content);
+            const userBudget = Number(tripDetails.budget);
+            const overBudget = total > userBudget;
+            return (
+              <div className="mb-4">
+                {data.length > 0 && (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={85}
+                        labelLine={false} label={({ percent }) => `${(percent * 100).toFixed(0)}%`}>
+                        {data.map((_, idx) => <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(value) => `₹${value}`} />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+                {total > 0 && (
+                  <div className={`rounded-xl p-3 text-sm font-semibold text-center mt-2 ${overBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    {overBudget
+                      ? `⚠️ Estimated ₹${total} exceeds budget by ₹${total - userBudget}`
+                      : `✅ Estimated ₹${total} — ₹${userBudget - total} left to spare!`}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-li:my-0.5 prose-strong:text-gray-900 prose-table:w-full prose-th:bg-gray-100 prose-th:p-2 prose-th:text-left prose-td:p-2 prose-td:border prose-td:border-gray-200">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
           </div>
         </div>
-
+      </div>
+    );
+  })}
+</div>
+                    
         {/* Packing Checklist - collapsible, editable */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4 mt-4">
           <button
