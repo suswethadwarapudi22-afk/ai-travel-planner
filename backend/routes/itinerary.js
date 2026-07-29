@@ -3,152 +3,138 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const axios = require('axios');
 
+// ─── Generate Itinerary ───────────────────────────────────────────────────────
 router.post('/generate', auth, async (req, res) => {
   try {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
 
     const prompt = `You are an expert travel planner for students in India.
+
 Plan a ${days}-day trip from ${source} to ${destination}.
-Budget: Rs.${budget} for ${groupSize} people
+Budget: ₹${budget} for ${groupSize} people
 Transport: ${transport}
 Interests: ${interests.join(', ')}
 
-Give a detailed day-wise itinerary with these sections:
+IMPORTANT FORMATTING RULES:
+- Use VERY short, compact bullet points in "label: value" format
+- NO long paragraphs or explanations
+- Each bullet should be 1 line, maximum 10-12 words
+- Use simple "-" for bullets, NOT asterisks
+- Example format:
+  - train: Visakhapatnam to Madgaon
+  - journey time: 24-28 hrs
+  - day 1 morning: arrive, check into hostel
+  - day 1 afternoon: Vagator beach, lunch at shack (₹150)
+  - hotel: Woke Hostel, Anjuna - ₹500/night
+
+Structure the response with these sections (use simple headings with ##):
+
 ## Day-wise Itinerary
-### Day 1 (then Day 2, Day 3 etc)
-- morning: activity
-- afternoon: activity  
-- evening: activity
+For EACH day, add a subheading "### Day X" (capital, e.g. ### Day 1), then list compact bullets for that day only (morning/afternoon/evening). Do not mix days together.
 
 ## Budget Breakdown
-- hotel, food, transport, tickets, total
+- hotel: ₹X
+- food: ₹X
+- transport: ₹X
+- tickets: ₹X
+- total: ₹X
 
 ## Top Hotels
-5 budget hotels with price and area
+(5 compact lines: name - price - area)
 
 ## Top Restaurants
-5 restaurants with specialty and price range
+(5 compact lines: name - specialty - price range)
 
 ## Hidden Gems & Tips
+(short bullet tips)
+
 ## Safety Tips
+(short bullet tips)
+
+## Weather & Clothing
+- weather: short description
+- pack: list items briefly
+
+## Documents Needed
+(short bullet list)
+
+## First Aid Kit
+(short bullet list)
+
+## Electronics to Carry
+(short bullet list)
+
 ## Local Guides & Helplines
-- emergency: 112
-- tourist helpline: 1364
+- national tourist helpline: 1364 (24x7, multilingual)
+- emergency number: 112
+- local police helpline: [give the actual state's number if known, else say "dial 100"]
+- how to book verified guide: [1 line - e.g. via state tourism website/app or hotel reception]
+- state tourism office: [name + general contact method if known]
 - women helpline: 1091
 
-Keep everything concise and practical for students.`;
+Keep EVERYTHING extremely concise. No fluff, no long sentences. For Local Guides & Helplines, only use real, publicly known official numbers - do not invent names or personal phone numbers.`;
 
-    const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        model: 'nvidia/nemotron-3-super-120b-a12b:free',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2000
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://ai-travel-planner-flax.vercel.app',
-          'X-Title': 'AI Travel Planner'
-        },
-        timeout: 30000
+    // Auto-retry up to 3 times if Gemini fails
+    const callGemini = async (attempt = 1) => {
+      try {
+        const response = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          { contents: [{ parts: [{ text: prompt }] }] },
+          { headers: { 'content-type': 'application/json' }, timeout: 30000 }
+        );
+        const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Empty response from Gemini');
+        return text;
+      } catch (err) {
+        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:89`, err.message);
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          return callGemini(attempt + 1);
+        }
+        throw err;
       }
-    );
+    };
 
-    const itinerary = response.data.choices[0].message.content;
+    const itinerary = await callGemini();
     res.json({ itinerary });
 
   } catch (err) {
-    console.error('Itinerary error: - itinerary.js:63', err.response?.data || err.message);
+    console.error('GENERATE ERROR: - itinerary.js:102', err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
 
+// ─── Ask AI Follow-up ─────────────────────────────────────────────────────────
 router.post('/ask', auth, async (req, res) => {
   try {
     const { question, tripDetails, itinerary } = req.body;
 
-   const prompt = `You are an expert travel planner for students in India.
-Plan a ${days}-day trip from ${source} to ${destination}.
-Budget: Rs.${budget} for ${groupSize} people
-Transport: ${transport}
-Interests: ${interests.join(', ')}
+    const prompt = `You are a helpful travel assistant for a student trip.
+Trip: ${tripDetails.source} to ${tripDetails.destination}, ${tripDetails.days} days, budget ₹${tripDetails.budget}, ${tripDetails.groupSize} people, transport ${tripDetails.transport}.
 
-Generate the itinerary in EXACTLY this order with these EXACT section headings:
+Existing itinerary summary (for context, don't repeat it):
+${itinerary.substring(0, 3000)}
 
-## Day-wise Itinerary
-Give a detailed day-by-day plan. For each day use ### Day 1, ### Day 2 etc.
-Each day should have Morning, Afternoon, Evening activities in bullet points.
+User question: "${question}"
 
-## Top Restaurants
-Give EXACTLY 5 budget-friendly restaurants. Each on its own line:
-- Name - Specialty - Price range per person
-
-## Places to Visit
-Give EXACTLY 5 must-visit places. Each on its own line:
-- Place name - Why visit - Entry fee if any
-
-## Top Hotels
-Give EXACTLY 5 budget hotels. Each on its own line:
-- Hotel name - Area - Price per night
-
-## Budget Breakdown
-Give itemized cost breakdown:
-- Transport: Rs.X
-- Hotel: Rs.X
-- Food: Rs.X
-- Entry tickets: Rs.X
-- Miscellaneous: Rs.X
-- Total: Rs.X
-
-## Weather & Clothing
-- Best time to visit
-- Current season
-- Pack: list of clothing items separated by commas
-
-## Documents Needed
-List 5 important documents as bullet points.
-
-## Electronics to Carry
-List 5 electronics as bullet points.
-
-## Safety Tips
-List 5 safety tips as bullet points.
-
-## Local Guides & Helplines
-- Emergency: 112
-- Tourist helpline: 1364
-- Women helpline: 1091
-- Police: 100
-- Local tourism office contact`;
+Answer in VERY short bullet points using "-" only, label: value format, no asterisks, no long paragraphs. If asked for more hotels/restaurants/places, give 5 NEW ones not already mentioned, format as: name - price/specialty - area.`;
 
     const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        model: 'meta-llama/llama-3.1-8b-instruct:free',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 500
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://ai-travel-planner-flax.vercel.app',
-          'X-Title': 'AI Travel Planner'
-        }
-      }
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      { contents: [{ parts: [{ text: prompt }] }] },
+      { headers: { 'content-type': 'application/json' } }
     );
 
-    const answer = response.data.choices[0].message.content;
+    const answer = response.data.candidates[0].content.parts[0].text;
     res.json({ answer });
 
   } catch (err) {
-    console.error('Ask error: - itinerary.js:147', err.message);
+    console.error('ASK ERROR: - itinerary.js:132', JSON.stringify(err.response?.data, null, 2));
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
 
+// ─── Live Weather ─────────────────────────────────────────────────────────────
 router.get('/weather/:city', auth, async (req, res) => {
   try {
     const city = req.params.city;
@@ -165,9 +151,13 @@ router.get('/weather/:city', auth, async (req, res) => {
       icon: item.weather[0].icon,
       wind: item.wind.speed,
     }));
-    res.json({ city: data.city.name, country: data.city.country, forecasts });
+    res.json({
+      city: data.city.name,
+      country: data.city.country,
+      forecasts,
+    });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:170', err.message);
+    console.error('Weather error: - itinerary.js:160', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });

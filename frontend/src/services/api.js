@@ -1,27 +1,29 @@
 import axios from 'axios';
 
-const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-// Wake up the server before making requests
-export const wakeServer = () => 
-  fetch(BASE_URL.replace('/api', '/')).catch(() => {});
-
-const API = axios.create({ 
-  baseURL: BASE_URL,
-  timeout: 300000  // 5 minutes
+const API = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
 });
 
+// Attach JWT token to every request automatically
 API.interceptors.request.use((req) => {
   const token = localStorage.getItem('token');
   if (token) req.headers.Authorization = `Bearer ${token}`;
   return req;
 });
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 export const register = (data) => API.post('/auth/register', data);
 export const login = (data) => API.post('/auth/login', data);
-export const generateItinerary = (data) => API.post('/itinerary/generate', data);
+
+// ─── Trips ────────────────────────────────────────────────────────────────────
 export const saveTrip = (data) => API.post('/trips', data);
 export const getTrips = () => API.get('/trips');
 export const deleteTrip = (id) => API.delete(`/trips/${id}`);
+
+// ─── Itinerary (AI) ───────────────────────────────────────────────────────────
+export const generateItinerary = (data) => API.post('/itinerary/generate', data);
 export const askItinerary = (data) => API.post('/itinerary/ask', data);
-export const getWeather = (city) => API.get(`/itinerary/weather/${encodeURIComponent(city)}`);
+
+// ─── Weather ──────────────────────────────────────────────────────────────────
+export const getWeather = (city) =>
+  API.get(`/itinerary/weather/${encodeURIComponent(city)}`);

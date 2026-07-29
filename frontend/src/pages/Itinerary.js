@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { saveTrip, askItinerary } from '../services/api';
+import { saveTrip, askItinerary, getWeather } from '../services/api';
 import ReactMarkdown from 'react-markdown';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -96,31 +96,9 @@ function getPackingItems(sections) {
   return result;
 }
 
-function calculateSettlements(balances) {
-  const creditors = balances
-    .filter((b) => b.balance > 1)
-    .map((b) => ({ ...b }))
-    .sort((a, b) => b.balance - a.balance);
-  const debtors = balances
-    .filter((b) => b.balance < -1)
-    .map((b) => ({ name: b.name, balance: -b.balance }))
-    .sort((a, b) => b.balance - a.balance);
-  const settlements = [];
-  let i = 0;
-  let j = 0;
-  while (i < debtors.length && j < creditors.length) {
-    const amount = Math.min(debtors[i].balance, creditors[j].balance);
-    settlements.push({ from: debtors[i].name, to: creditors[j].name, amount: Math.round(amount) });
-    debtors[i].balance -= amount;
-    creditors[j].balance -= amount;
-    if (debtors[i].balance < 1) i++;
-    if (creditors[j].balance < 1) j++;
-  }
-  return settlements;
-}
-
 const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
+/* eslint-disable no-unused-vars */
 function Itinerary() {
   const { state } = useLocation();
   const navigate = useNavigate();
@@ -131,15 +109,12 @@ function Itinerary() {
   const [asking, setAsking] = useState(false);
   const [packingList, setPackingList] = useState(null);
   const [newItemText, setNewItemText] = useState({});
-  const [members, setMembers] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [newMemberName, setNewMemberName] = useState('');
-  const [newExpense, setNewExpense] = useState({ description: '', amount: '', paidBy: '' });
+  const [weather, setWeather] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   const itinerary = state?.itinerary;
   const tripDetails = state?.tripDetails;
   const storageKey = `packing-v2-${tripDetails?.destination}-${tripDetails?.days}`;
-  const splitStorageKey = `split-${tripDetails?.destination}-${tripDetails?.days}`;
 
   useEffect(() => {
     if (!tripDetails || !itinerary) return;
@@ -150,27 +125,58 @@ function Itinerary() {
       const raw = getPackingItems(parseSections(itinerary));
       const initial = {};
       Object.entries(raw).forEach(([cat, items]) => {
-        initial[cat] = items.map((text, idx) => ({ id: `${cat}-${idx}-${Date.now()}`, text, checked: false }));
+        initial[cat] = items.map((text, idx) => ({
+          id: `${cat}-${idx}-${Date.now()}`,
+          text,
+          checked: false,
+        }));
       });
       setPackingList(initial);
     }
     // eslint-disable-next-line
   }, [storageKey]);
 
+  const normalizeCity = (city) => {
+    const cityMap = {
+      vizag: 'Visakhapatnam',
+      vskp: 'Visakhapatnam',
+      visakapatnam: 'Visakhapatnam',
+      visakhapatnam: 'Visakhapatnam',
+      hyd: 'Hyderabad',
+      hyderabad: 'Hyderabad',
+      blr: 'Bangalore',
+      bangalore: 'Bangalore',
+      bengaluru: 'Bangalore',
+      mum: 'Mumbai',
+      mumbai: 'Mumbai',
+      bombay: 'Mumbai',
+      madras: 'Chennai',
+      chennai: 'Chennai',
+      calcutta: 'Kolkata',
+      kolkata: 'Kolkata',
+      del: 'Delhi',
+      delhi: 'Delhi',
+      'new delhi': 'Delhi',
+      goa: 'Goa',
+      pune: 'Pune',
+      jaipur: 'Jaipur',
+      kashmir: 'Srinagar',
+      shimla: 'Shimla',
+      manali: 'Manali',
+      ooty: 'Udhagamandalam',
+    };
+    return cityMap[city.toLowerCase().trim()] || city;
+  };
+
   useEffect(() => {
-    if (!tripDetails) return;
-    const savedSplit = localStorage.getItem(splitStorageKey);
-    if (savedSplit) {
-      const parsed = JSON.parse(savedSplit);
-      setMembers(parsed.members || []);
-      setExpenses(parsed.expenses || []);
-    } else {
-      const defaultMembers = Array.from({ length: Number(tripDetails.groupSize) || 1 }, (_, i) => `Person ${i + 1}`);
-      setMembers(defaultMembers);
-      setExpenses([]);
-    }
+    if (!tripDetails?.destination) return;
+    setWeatherLoading(true);
+    getWeather(normalizeCity(tripDetails.destination))
+      .then((res) => setWeather(res.data))
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
     // eslint-disable-next-line
-  }, [splitStorageKey]);
+  }, []);
 
   if (!state) {
     navigate('/dashboard');
@@ -185,7 +191,9 @@ function Itinerary() {
     setPackingList((prev) => {
       const updated = {
         ...prev,
-        [category]: prev[category].map((item) => (item.id === id ? { ...item, checked: !item.checked } : item)),
+        [category]: prev[category].map((item) =>
+          item.id === id ? { ...item, checked: !item.checked } : item
+        ),
       };
       persistList(updated);
       return updated;
@@ -209,51 +217,15 @@ function Itinerary() {
     setPackingList((prev) => {
       const updated = {
         ...prev,
-        [category]: [...(prev[category] || []), { id: `${category}-${Date.now()}`, text, checked: false }],
+        [category]: [
+          ...(prev[category] || []),
+          { id: `${category}-${Date.now()}`, text, checked: false },
+        ],
       };
       persistList(updated);
       return updated;
     });
     setNewItemText((prev) => ({ ...prev, [category]: '' }));
-  };
-
-  const persistSplit = (m, e) => {
-    localStorage.setItem(splitStorageKey, JSON.stringify({ members: m, expenses: e }));
-  };
-
-  const addMember = () => {
-    const name = newMemberName.trim();
-    if (!name || members.includes(name)) return;
-    const updated = [...members, name];
-    setMembers(updated);
-    persistSplit(updated, expenses);
-    setNewMemberName('');
-  };
-
-  const removeMember = (name) => {
-    const updatedMembers = members.filter((m) => m !== name);
-    const updatedExpenses = expenses.filter((e) => e.paidBy !== name);
-    setMembers(updatedMembers);
-    setExpenses(updatedExpenses);
-    persistSplit(updatedMembers, updatedExpenses);
-  };
-
-  const addExpenseHandler = () => {
-    const amount = parseFloat(newExpense.amount);
-    if (!newExpense.description.trim() || !amount || amount <= 0 || !newExpense.paidBy) return;
-    const updated = [
-      ...expenses,
-      { id: Date.now(), description: newExpense.description.trim(), amount, paidBy: newExpense.paidBy },
-    ];
-    setExpenses(updated);
-    persistSplit(members, updated);
-    setNewExpense({ description: '', amount: '', paidBy: newExpense.paidBy });
-  };
-
-  const deleteExpense = (id) => {
-    const updated = expenses.filter((e) => e.id !== id);
-    setExpenses(updated);
-    persistSplit(members, updated);
   };
 
   const handleSave = async () => {
@@ -274,7 +246,10 @@ function Itinerary() {
       const res = await askItinerary({ question: q, tripDetails, itinerary });
       setChatHistory((prev) => [...prev, { question: q, answer: res.data.answer }]);
     } catch (err) {
-      setChatHistory((prev) => [...prev, { question: q, answer: 'Sorry, something went wrong. Try again.' }]);
+      setChatHistory((prev) => [
+        ...prev,
+        { question: q, answer: 'Sorry, something went wrong. Try again.' },
+      ]);
     }
     setAsking(false);
   };
@@ -287,31 +262,73 @@ function Itinerary() {
   const totalPackingItems = allPackingItems.length;
   const checkedCount = allPackingItems.filter((i) => i.checked).length;
 
-  const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const perPersonShare = members.length ? totalExpense / members.length : 0;
-  const balances = members.map((name) => {
-    const paid = expenses.filter((e) => e.paidBy === name).reduce((sum, e) => sum + e.amount, 0);
-    return { name, paid, balance: paid - perPersonShare };
-  });
-  const settlements = calculateSettlements(balances);
-
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-3xl mx-auto">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="text-blue-600 mb-4 font-medium"
-        >
-          ← Back to Dashboard
-        </button>
+        <div className="flex justify-between items-center mb-4">
+          <button onClick={() => navigate('/dashboard')} className="text-blue-600 font-medium">
+            ← Back to Dashboard
+          </button>
+          <button
+            onClick={() => navigate('/expenses', { state: { tripDetails } })}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition"
+          >
+            💸 Split Expenses
+          </button>
+        </div>
 
+        {/* Trip Header */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-white mb-4">
           <h2 className="text-2xl font-bold">
             {tripDetails.source} → {tripDetails.destination}
           </h2>
           <p className="opacity-90">
-            {tripDetails.days} days · ₹{tripDetails.budget} · {tripDetails.groupSize} people · {tripDetails.transport}
+            {tripDetails.days} days · ₹{tripDetails.budget} · {tripDetails.groupSize} people ·{' '}
+            {tripDetails.transport}
           </p>
+        </div>
+
+        {/* Weather Widget */}
+        <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
+          <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <span>🌦️</span> Live Weather — {tripDetails.destination}
+          </h3>
+          {weatherLoading && <p className="text-sm text-gray-400">Fetching weather...</p>}
+          {!weatherLoading && !weather && (
+            <p className="text-sm text-red-400">Could not load weather data.</p>
+          )}
+          {!weatherLoading && weather && (
+            <div>
+              <p className="text-sm text-gray-500 mb-3">
+                {weather.city}, {weather.country} — Next 15 hours forecast
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {weather.forecasts.map((f, idx) => (
+                  <div key={idx} className="bg-blue-50 rounded-xl p-2 text-center">
+                    <p className="text-xs text-gray-500">
+                      {new Date(f.time).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                    <img
+                      src={`https://openweathermap.org/img/wn/${f.icon}.png`}
+                      alt={f.description}
+                      className="w-8 h-8 mx-auto"
+                    />
+                    <p className="text-sm font-bold text-gray-800">{f.temp}°C</p>
+                    <p className="text-xs text-gray-500 capitalize">{f.description}</p>
+                    <p className="text-xs text-blue-500">💧{f.humidity}%</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 bg-yellow-50 rounded-lg p-3 text-sm text-yellow-800">
+                💡 <span className="font-medium">Tip:</span> Feels like{' '}
+                {weather.forecasts[0]?.feels}°C with {weather.forecasts[0]?.humidity}% humidity.
+                Wind speed: {weather.forecasts[0]?.wind} m/s.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Route Map */}
@@ -326,7 +343,9 @@ function Itinerary() {
             style={{ border: 0, borderRadius: '12px' }}
             loading="lazy"
             allowFullScreen
-            src={`https://maps.google.com/maps?saddr=${encodeURIComponent(tripDetails.source)}&daddr=${encodeURIComponent(tripDetails.destination)}&output=embed`}
+            src={`https://maps.google.com/maps?saddr=${encodeURIComponent(
+              tripDetails.source
+            )}&daddr=${encodeURIComponent(tripDetails.destination)}&output=embed`}
           ></iframe>
         </div>
 
@@ -396,13 +415,13 @@ function Itinerary() {
                   </button>
                   {isOpen && (
                     <div className="px-5 pb-5">
-                      {section.title === 'Budget Breakdown' && (() => {
-                        const { data, total } = parseBudget(section.content);
-                        const userBudget = Number(tripDetails.budget);
-                        const overBudget = total > userBudget;
-                        return (
-                          <div className="mb-4">
-                            <div className="flex flex-col items-center mb-3">
+                      {section.title === 'Budget Breakdown' &&
+                        (() => {
+                          const { data, total } = parseBudget(section.content);
+                          const userBudget = Number(tripDetails.budget);
+                          const overBudget = total > userBudget;
+                          return (
+                            <div className="mb-4">
                               <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
                                   <Pie
@@ -416,36 +435,54 @@ function Itinerary() {
                                     label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                                   >
                                     {data.map((entry, idx) => (
-                                      <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                                      <Cell
+                                        key={idx}
+                                        fill={CHART_COLORS[idx % CHART_COLORS.length]}
+                                      />
                                     ))}
                                   </Pie>
                                   <Tooltip formatter={(value, name) => [`₹${value}`, name]} />
                                   <Legend
                                     layout="horizontal"
                                     verticalAlign="bottom"
-                                    formatter={(value, entry) => `${value}: ₹${entry.payload.value}`}
+                                    formatter={(value, entry) =>
+                                      `${value}: ₹${entry.payload.value}`
+                                    }
                                     wrapperStyle={{ fontSize: '12px', lineHeight: '20px' }}
                                   />
                                 </PieChart>
                               </ResponsiveContainer>
+                              <div
+                                className={`rounded-lg p-3 text-sm font-medium text-center ${
+                                  overBudget
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-green-100 text-green-700'
+                                }`}
+                              >
+                                {overBudget
+                                  ? `⚠️ Estimated total ₹${total} exceeds your budget of ₹${userBudget} by ₹${total - userBudget}`
+                                  : `✅ Estimated total ₹${total} fits within your budget of ₹${userBudget} (₹${userBudget - total} to spare)`}
+                              </div>
                             </div>
-                            <div className={`rounded-lg p-3 text-sm font-medium text-center ${overBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                              {overBudget
-                                ? `⚠️ Estimated total ₹${total} exceeds your budget of ₹${userBudget} by ₹${total - userBudget}`
-                                : `✅ Estimated total ₹${total} fits within your budget of ₹${userBudget} (₹${userBudget - total} to spare)`}
-                            </div>
-                          </div>
-                        );
-                      })()}
+                          );
+                        })()}
 
-                      {(section.title.includes('Top Hotels') || section.title.includes('Top Restaurants')) ? (
+                      {section.title.includes('Top Hotels') ||
+                      section.title.includes('Top Restaurants') ? (
                         <div className="space-y-2">
                           {parseListItems(section.content).map((item, idx) => (
-                            <div key={idx} className="bg-white rounded-lg p-3 border border-gray-100">
+                            <div
+                              key={idx}
+                              className="bg-white rounded-lg p-3 border border-gray-100"
+                            >
                               <p className="font-semibold text-gray-900">{item.name}</p>
-                              {item.rest && <p className="text-sm text-gray-500">{item.rest}</p>}
+                              {item.rest && (
+                                <p className="text-sm text-gray-500">{item.rest}</p>
+                              )}
                               <a
-                                href={`https://www.google.com/search?q=${encodeURIComponent(item.name + ' ' + tripDetails.destination)}`}
+                                href={`https://www.google.com/search?q=${encodeURIComponent(
+                                  item.name + ' ' + tripDetails.destination
+                                )}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 text-sm font-medium hover:underline inline-flex items-center gap-1 mt-1"
@@ -455,18 +492,27 @@ function Itinerary() {
                             </div>
                           ))}
                         </div>
-                      ) : (section.title === 'Day-wise Itinerary' || section.title === 'Hidden Gems & Tips') ? (
+                      ) : section.title === 'Day-wise Itinerary' ||
+                        section.title === 'Hidden Gems & Tips' ? (
                         <div className="space-y-1">
                           {parseDayLines(section.content).map((line, idx) =>
                             line.type === 'heading' ? (
-                              <h4 key={idx} className="font-bold text-gray-900 uppercase text-sm mt-3 mb-1">
+                              <h4
+                                key={idx}
+                                className="font-bold text-gray-900 uppercase text-sm mt-3 mb-1"
+                              >
                                 {line.text}
                               </h4>
                             ) : (
-                              <div key={idx} className="flex items-start justify-between gap-2 py-0.5">
+                              <div
+                                key={idx}
+                                className="flex items-start justify-between gap-2 py-0.5"
+                              >
                                 <span className="text-gray-700 text-sm">• {line.text}</span>
                                 <a
-                                  href={`https://www.google.com/search?q=${encodeURIComponent(line.text + ' ' + tripDetails.destination)}&tbm=isch`}
+                                  href={`https://www.google.com/search?q=${encodeURIComponent(
+                                    line.text + ' ' + tripDetails.destination
+                                  )}&tbm=isch`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-500 text-sm flex-shrink-0"
@@ -491,7 +537,7 @@ function Itinerary() {
           </div>
         </div>
 
-        {/* Packing Checklist - collapsible, editable */}
+        {/* Packing Checklist */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4 mt-4">
           <button
             onClick={() => toggleSection('Packing Checklist')}
@@ -499,16 +545,22 @@ function Itinerary() {
           >
             <span className="text-base font-bold text-gray-900 flex items-center gap-2">
               <span>🎒</span> Packing Checklist
-              <span className="text-sm text-gray-500 font-normal ml-1">({checkedCount}/{totalPackingItems} packed)</span>
+              <span className="text-sm text-gray-500 font-normal ml-1">
+                ({checkedCount}/{totalPackingItems} packed)
+              </span>
             </span>
-            <span className="text-gray-400 text-xl">{openSections['Packing Checklist'] ? '−' : '+'}</span>
+            <span className="text-gray-400 text-xl">
+              {openSections['Packing Checklist'] ? '−' : '+'}
+            </span>
           </button>
           {openSections['Packing Checklist'] && packingList && (
             <div className="px-5 pb-5">
               <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
                 <div
                   className="bg-green-500 h-2 rounded-full transition-all"
-                  style={{ width: `${totalPackingItems ? (checkedCount / totalPackingItems) * 100 : 0}%` }}
+                  style={{
+                    width: `${totalPackingItems ? (checkedCount / totalPackingItems) * 100 : 0}%`,
+                  }}
                 ></div>
               </div>
               {Object.entries(packingList).map(([category, items]) => (
@@ -523,7 +575,11 @@ function Itinerary() {
                           onChange={() => toggleItem(category, item.id)}
                           className="w-4 h-4 accent-blue-600 flex-shrink-0"
                         />
-                        <span className={`text-sm flex-1 ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                        <span
+                          className={`text-sm flex-1 ${
+                            item.checked ? 'line-through text-gray-400' : 'text-gray-700'
+                          }`}
+                        >
                           {item.text}
                         </span>
                         <button
@@ -544,7 +600,9 @@ function Itinerary() {
                       type="text"
                       placeholder={`Add ${category.toLowerCase()} item...`}
                       value={newItemText[category] || ''}
-                      onChange={(e) => setNewItemText((prev) => ({ ...prev, [category]: e.target.value }))}
+                      onChange={(e) =>
+                        setNewItemText((prev) => ({ ...prev, [category]: e.target.value }))
+                      }
                       onKeyDown={(e) => e.key === 'Enter' && addItem(category)}
                       className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
@@ -557,132 +615,6 @@ function Itinerary() {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-        </div>
-
-        {/* Group Expense Splitter - collapsible */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
-          <button
-            onClick={() => toggleSection('Expense Splitter')}
-            className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition"
-          >
-            <span className="text-base font-bold text-gray-900 flex items-center gap-2">
-              <span>💸</span> Group Expense Splitter
-              {totalExpense > 0 && (
-                <span className="text-sm text-gray-500 font-normal ml-1">(₹{totalExpense.toFixed(0)} total)</span>
-              )}
-            </span>
-            <span className="text-gray-400 text-xl">{openSections['Expense Splitter'] ? '−' : '+'}</span>
-          </button>
-          {openSections['Expense Splitter'] && (
-            <div className="px-5 pb-5 space-y-4">
-              {/* Members */}
-              <div>
-                <p className="text-xs font-bold text-gray-500 uppercase mb-2">Group Members</p>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {members.map((name) => (
-                    <span key={name} className="bg-blue-50 text-blue-700 text-sm px-3 py-1 rounded-full flex items-center gap-1">
-                      {name}
-                      <button onClick={() => removeMember(name)} className="text-blue-400 hover:text-red-500 ml-1">✕</button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add member name"
-                    value={newMemberName}
-                    onChange={(e) => setNewMemberName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addMember()}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                  <button onClick={addMember} className="bg-blue-100 text-blue-600 px-3 rounded-lg text-sm font-medium hover:bg-blue-200">
-                    + Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Expenses */}
-              <div>
-                <p className="text-xs font-bold text-gray-500 uppercase mb-2">Expenses</p>
-                <div className="space-y-1 mb-2">
-                  {expenses.map((e) => (
-                    <div key={e.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
-                      <span className="text-gray-700">
-                        {e.description} <span className="text-gray-400">· paid by {e.paidBy}</span>
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900">₹{e.amount}</span>
-                        <button onClick={() => deleteExpense(e.id)} className="text-gray-300 hover:text-red-500">✕</button>
-                      </div>
-                    </div>
-                  ))}
-                  {expenses.length === 0 && <p className="text-xs text-gray-400 italic">No expenses added yet</p>}
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    placeholder="Description (e.g. Lunch)"
-                    value={newExpense.description}
-                    onChange={(e) => setNewExpense((p) => ({ ...p, description: e.target.value }))}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Amount"
-                    value={newExpense.amount}
-                    onChange={(e) => setNewExpense((p) => ({ ...p, amount: e.target.value }))}
-                    className="sm:w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                  <select
-                    value={newExpense.paidBy}
-                    onChange={(e) => setNewExpense((p) => ({ ...p, paidBy: e.target.value }))}
-                    className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  >
-                    <option value="">Paid by...</option>
-                    {members.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                  <button onClick={addExpenseHandler} className="bg-blue-600 text-white px-4 rounded-lg text-sm font-medium hover:bg-blue-700">
-                    + Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Summary */}
-              {totalExpense > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-gray-500 uppercase mb-2">Summary</p>
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1 mb-2">
-                    <p className="text-gray-700">Total spent: <span className="font-semibold">₹{totalExpense.toFixed(0)}</span></p>
-                    <p className="text-gray-700">Fair share per person: <span className="font-semibold">₹{perPersonShare.toFixed(0)}</span></p>
-                  </div>
-                  <div className="space-y-1 mb-2">
-                    {balances.map((b) => (
-                      <div key={b.name} className="flex justify-between text-sm">
-                        <span className="text-gray-700">{b.name} (paid ₹{b.paid.toFixed(0)})</span>
-                        <span className={`font-semibold ${b.balance >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          {b.balance >= 0 ? `gets back ₹${b.balance.toFixed(0)}` : `owes ₹${Math.abs(b.balance).toFixed(0)}`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {settlements.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-gray-500 uppercase mb-1">Settle Up</p>
-                      <div className="space-y-1">
-                        {settlements.map((s, idx) => (
-                          <p key={idx} className="text-sm text-gray-700">
-                            💵 <span className="font-semibold">{s.from}</span> pays <span className="font-semibold">{s.to}</span> ₹{s.amount}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
         </div>
