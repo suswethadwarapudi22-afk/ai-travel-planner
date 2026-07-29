@@ -8,29 +8,25 @@ router.post('/generate', auth, async (req, res) => {
   try {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
 
-    const prompt = `You are an expert travel planner for students in India.
+   const prompt = `You are an expert travel planner for students in India.
 
 Plan a ${days}-day trip from ${source} to ${destination}.
 Budget: ₹${budget} for ${groupSize} people
 Transport: ${transport}
 Interests: ${interests.join(', ')}
 
-IMPORTANT FORMATTING RULES:
-- Use VERY short, compact bullet points in "label: value" format
-- NO long paragraphs or explanations
-- Each bullet should be 1 line, maximum 10-12 words
-- Use simple "-" for bullets, NOT asterisks
-- Example format:
-  - train: Visakhapatnam to Madgaon
-  - journey time: 24-28 hrs
-  - day 1 morning: arrive, check into hostel
-  - day 1 afternoon: Vagator beach, lunch at shack (₹150)
-  - hotel: Woke Hostel, Anjuna - ₹500/night
-
-Structure the response with these sections (use simple headings with ##):
+CRITICAL FORMATTING RULES - FOLLOW EXACTLY:
+- Start your response DIRECTLY with ## Day-wise Itinerary (NO title line before it)
+- Use ONLY ## for main section headings
+- Use ### Day 1, ### Day 2 etc for day subheadings
+- Use simple - for bullet points
+- NO asterisks (*) anywhere in the response
+- NO bold text (**text**) anywhere
+- NO introductory title or summary before the first ## heading
+- Keep each bullet point to 1 line maximum
 
 ## Day-wise Itinerary
-For EACH day, add a subheading "### Day X" (capital, e.g. ### Day 1), then list compact bullets for that day only (morning/afternoon/evening). Do not mix days together.
+For EACH day use ### Day X subheading, then bullet points for morning/afternoon/evening
 
 ## Budget Breakdown
 - hotel: ₹X
@@ -40,10 +36,10 @@ For EACH day, add a subheading "### Day X" (capital, e.g. ### Day 1), then list 
 - total: ₹X
 
 ## Top Hotels
-(5 compact lines: name - price - area)
+(5 lines: name - price/night - area)
 
 ## Top Restaurants
-(5 compact lines: name - specialty - price range)
+(5 lines: name - specialty - price range)
 
 ## Hidden Gems & Tips
 (short bullet tips)
@@ -52,28 +48,38 @@ For EACH day, add a subheading "### Day X" (capital, e.g. ### Day 1), then list 
 (short bullet tips)
 
 ## Weather & Clothing
-- weather: short description
-- pack: list items briefly
+- weather: brief description
+- pack: light cotton, hat, sunglasses, flip-flops, swimwear, light jacket
 
 ## Documents Needed
-(short bullet list)
+- Aadhaar card or passport
+- student ID card
+- train/bus tickets (printed or digital)
+- driving license (if renting scooter)
+- accommodation booking confirmation
 
 ## First Aid Kit
-(short bullet list)
+- paracetamol and basic pain relief
+- antiseptic wipes and band-aids
+- ORS sachets and antacids
+- insect repellent
+- motion sickness pills
 
 ## Electronics to Carry
-(short bullet list)
+- mobile phone and charger
+- power bank (essential)
+- earphones
+- camera (optional)
+- travel adapter if needed
 
 ## Local Guides & Helplines
-- national tourist helpline: 1364 (24x7, multilingual)
-- emergency number: 112
-- local police helpline: [give the actual state's number if known, else say "dial 100"]
-- how to book verified guide: [1 line - e.g. via state tourism website/app or hotel reception]
-- state tourism office: [name + general contact method if known]
+- tourist helpline: 1364 (24x7, multilingual)
+- emergency: 112
+- police: 100
 - women helpline: 1091
+- book guides via: state tourism website or hotel reception
 
-Keep EVERYTHING extremely concise. No fluff, no long sentences. For Local Guides & Helplines, only use real, publicly known official numbers - do not invent names or personal phone numbers.`;
-
+Keep everything concise. No long paragraphs. No asterisks. No bold text.`;
     // Auto-retry up to 3 times if Gemini fails
     const callGemini = async (attempt = 1) => {
       try {
@@ -86,7 +92,7 @@ Keep EVERYTHING extremely concise. No fluff, no long sentences. For Local Guides
         if (!text) throw new Error('Empty response from Gemini');
         return text;
       } catch (err) {
-        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:89`, err.message);
+        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:95`, err.message);
         if (attempt < 3) {
           await new Promise((r) => setTimeout(r, 1500 * attempt));
           return callGemini(attempt + 1);
@@ -99,7 +105,7 @@ Keep EVERYTHING extremely concise. No fluff, no long sentences. For Local Guides
     res.json({ itinerary });
 
   } catch (err) {
-    console.error('GENERATE ERROR: - itinerary.js:102', err.message);
+    console.error('GENERATE ERROR: - itinerary.js:108', err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
@@ -129,7 +135,7 @@ Answer in VERY short bullet points using "-" only, label: value format, no aster
     res.json({ answer });
 
   } catch (err) {
-    console.error('ASK ERROR: - itinerary.js:132', JSON.stringify(err.response?.data, null, 2));
+    console.error('ASK ERROR: - itinerary.js:138', JSON.stringify(err.response?.data, null, 2));
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
@@ -157,7 +163,7 @@ router.get('/weather/:city', auth, async (req, res) => {
       forecasts,
     });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:160', err.message);
+    console.error('Weather error: - itinerary.js:166', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
