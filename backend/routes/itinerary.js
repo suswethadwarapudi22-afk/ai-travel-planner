@@ -8,7 +8,7 @@ router.post('/generate', auth, async (req, res) => {
   try {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
 
-   const prompt = `You are an expert travel planner for students in India.
+const prompt = `You are an expert travel planner for students in India.
 
 Plan a ${days}-day trip from ${source} to ${destination}.
 Budget: ₹${budget} for ${groupSize} people
