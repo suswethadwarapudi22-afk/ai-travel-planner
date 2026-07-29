@@ -69,11 +69,59 @@ router.post('/ask', auth, async (req, res) => {
   try {
     const { question, tripDetails, itinerary } = req.body;
 
-    const prompt = `You are a helpful travel assistant.
-Trip: ${tripDetails.source} to ${tripDetails.destination}, ${tripDetails.days} days, budget Rs.${tripDetails.budget}, ${tripDetails.groupSize} people.
-Existing itinerary: ${itinerary.substring(0, 1000)}
-Question: "${question}"
-Answer briefly in bullet points.`;
+   const prompt = `You are an expert travel planner for students in India.
+Plan a ${days}-day trip from ${source} to ${destination}.
+Budget: Rs.${budget} for ${groupSize} people
+Transport: ${transport}
+Interests: ${interests.join(', ')}
+
+Generate the itinerary in EXACTLY this order with these EXACT section headings:
+
+## Day-wise Itinerary
+Give a detailed day-by-day plan. For each day use ### Day 1, ### Day 2 etc.
+Each day should have Morning, Afternoon, Evening activities in bullet points.
+
+## Top Restaurants
+Give EXACTLY 5 budget-friendly restaurants. Each on its own line:
+- Name - Specialty - Price range per person
+
+## Places to Visit
+Give EXACTLY 5 must-visit places. Each on its own line:
+- Place name - Why visit - Entry fee if any
+
+## Top Hotels
+Give EXACTLY 5 budget hotels. Each on its own line:
+- Hotel name - Area - Price per night
+
+## Budget Breakdown
+Give itemized cost breakdown:
+- Transport: Rs.X
+- Hotel: Rs.X
+- Food: Rs.X
+- Entry tickets: Rs.X
+- Miscellaneous: Rs.X
+- Total: Rs.X
+
+## Weather & Clothing
+- Best time to visit
+- Current season
+- Pack: list of clothing items separated by commas
+
+## Documents Needed
+List 5 important documents as bullet points.
+
+## Electronics to Carry
+List 5 electronics as bullet points.
+
+## Safety Tips
+List 5 safety tips as bullet points.
+
+## Local Guides & Helplines
+- Emergency: 112
+- Tourist helpline: 1364
+- Women helpline: 1091
+- Police: 100
+- Local tourism office contact`;
 
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -96,7 +144,7 @@ Answer briefly in bullet points.`;
     res.json({ answer });
 
   } catch (err) {
-    console.error('Ask error: - itinerary.js:99', err.message);
+    console.error('Ask error: - itinerary.js:147', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
@@ -119,7 +167,7 @@ router.get('/weather/:city', auth, async (req, res) => {
     }));
     res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:122', err.message);
+    console.error('Weather error: - itinerary.js:170', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
