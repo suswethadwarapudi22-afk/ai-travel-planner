@@ -7,61 +7,103 @@ router.post('/generate', auth, async (req, res) => {
   try {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
 
-    const prompt = `You are an expert travel planner for students in India.
-Plan a ${days}-day trip from ${source} to ${destination}.
-Budget: Rs.${budget} for ${groupSize} people
-Transport: ${transport}
-Interests: ${interests.join(', ')}
+    const prompt = `You are a travel planner. Generate a trip plan with EXACTLY these section headings and NO other text before the first heading.
 
-Generate the itinerary in EXACTLY this order with these EXACT section headings:
+STRICT RULES:
+- Start with ## Day-wise Itinerary immediately, no title before it
+- Use ONLY these exact ## headings listed below
+- Use ### Day 1, ### Day 2 for day subheadings inside Day-wise Itinerary
+- Use ONLY - for bullets, never use * or **
+- Never use bold text anywhere
+- Keep each line short (under 12 words)
+
+Trip details:
+- From: ${source}
+- To: ${destination}  
+- Budget: ₹${budget} total for ${groupSize} people
+- Days: ${days}
+- Transport: ${transport}
+- Interests: ${interests.join(', ')}
 
 ## Day-wise Itinerary
-Give a detailed day-by-day plan. For each day use ### Day 1, ### Day 2 etc.
-Each day should have Morning, Afternoon, Evening activities in bullet points.
-Include food stops, travel tips and estimated costs per activity.
 
-## Top Restaurants
-Give EXACTLY 5 budget-friendly restaurants with this format:
-- Restaurant Name - Specialty dish - Price range per person - Area/Location
+### Day 1
+- morning: [activity]
+- afternoon: [activity]
+- evening: [activity]
 
-## Places to Visit
-Give EXACTLY 5 must-visit places with this format:
-- Place Name - Why visit it - Entry fee - Best time to visit
+### Day 2
+- morning: [activity]
+- afternoon: [activity]
+- evening: [activity]
 
-## Top Hotels
-Give EXACTLY 5 budget hotels with this format:
-- Hotel Name - Area - Price per night - Why good for students
+(continue for all ${days} days)
 
 ## Budget Breakdown
-Give itemized cost breakdown in bullet points:
-- Transport: Rs.X
-- Hotel: Rs.X
-- Food: Rs.X
-- Entry tickets: Rs.X
-- Miscellaneous: Rs.X
-- Total: Rs.X
+- hotel: ₹[amount]
+- food: ₹[amount]
+- transport: ₹[amount]
+- tickets: ₹[amount]
+- total: ₹[amount]
 
-## Weather & Clothing
-- Best time to visit: month/season
-- Current weather: description
-- Pack: item1, item2, item3, item4, item5
+## Top Hotels
+- [Hotel Name] - ₹[price]/night - [area]
+- [Hotel Name] - ₹[price]/night - [area]
+- [Hotel Name] - ₹[price]/night - [area]
+- [Hotel Name] - ₹[price]/night - [area]
+- [Hotel Name] - ₹[price]/night - [area]
 
-## Documents Needed
-List exactly 5 important documents as bullet points.
+## Top Restaurants
+- [Restaurant Name] - [specialty] - ₹[price range]
+- [Restaurant Name] - [specialty] - ₹[price range]
+- [Restaurant Name] - [specialty] - ₹[price range]
+- [Restaurant Name] - [specialty] - ₹[price range]
+- [Restaurant Name] - [specialty] - ₹[price range]
 
-## Electronics to Carry
-List exactly 5 electronics as bullet points.
+## Hidden Gems & Tips
+- [tip]
+- [tip]
+- [tip]
+- [tip]
+- [tip]
 
 ## Safety Tips
-List exactly 5 safety tips as bullet points.
+- [tip]
+- [tip]
+- [tip]
+- [tip]
+
+## Weather & Clothing
+- weather: [brief description of weather at destination]
+- pack: light cotton, sunglasses, hat, flip-flops, light jacket, swimwear
+
+## Documents Needed
+- Aadhaar card or government photo ID
+- student ID card
+- travel tickets (printed or digital)
+- driving license (if renting scooter)
+- hotel booking confirmation
+
+## First Aid Kit
+- paracetamol and basic pain relief
+- antiseptic wipes and band-aids
+- ORS sachets for dehydration
+- insect repellent
+- motion sickness pills
+
+## Electronics to Carry
+- mobile phone and charger
+- power bank (essential for travel days)
+- earphones or headphones
+- camera (optional)
+- universal travel adapter
 
 ## Local Guides & Helplines
-- Emergency: 112
-- Tourist helpline: 1364
-- Women helpline: 1091
-- Police: 100
-- Ambulance: 108
-- State tourism: provide actual number if known`;
+- tourist helpline: 1364 (24x7)
+- emergency: 112
+- police: 100
+- women helpline: 1091
+- book guides via: state tourism website or hotel reception`;
 
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -85,7 +127,7 @@ List exactly 5 safety tips as bullet points.
     res.json({ itinerary });
 
   } catch (err) {
-    console.error('Itinerary error: - itinerary.js:88', err.response?.data || err.message);
+    console.error('Itinerary error: - itinerary.js:130', err.response?.data || err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
@@ -129,7 +171,7 @@ Format: - Name - details - price`;
     res.json({ answer });
 
   } catch (err) {
-    console.error('Ask error: - itinerary.js:132', err.message);
+    console.error('Ask error: - itinerary.js:174', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
@@ -152,7 +194,7 @@ router.get('/weather/:city', auth, async (req, res) => {
     }));
     res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:155', err.message);
+    console.error('Weather error: - itinerary.js:197', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
