@@ -3,41 +3,27 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const axios = require('axios');
 
+// ─── Generate Itinerary ───────────────────────────────────────────────────────
 router.post('/generate', auth, async (req, res) => {
   try {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
 
-    const prompt = `You are a travel planner. Generate a trip plan with EXACTLY these section headings and NO other text before the first heading.
+    const prompt = `Generate a travel itinerary. Output ONLY the sections below. No thinking. No explanation. No extra text. Start directly with ## Day-wise Itinerary.
 
-STRICT RULES:
-- Start with ## Day-wise Itinerary immediately, no title before it
-- Use ONLY these exact ## headings listed below
-- Use ### Day 1, ### Day 2 for day subheadings inside Day-wise Itinerary
-- Use ONLY - for bullets, never use * or **
-- Never use bold text anywhere
-- Keep each line short (under 12 words)
+Trip: ${source} to ${destination}, ${days} days, ₹${budget} for ${groupSize} people, ${transport}, interests: ${interests.join(', ')}
 
-Trip details:
-- From: ${source}
-- To: ${destination}  
-- Budget: ₹${budget} total for ${groupSize} people
-- Days: ${days}
-- Transport: ${transport}
-- Interests: ${interests.join(', ')}
+Output exactly these sections in this order:
 
 ## Day-wise Itinerary
-
 ### Day 1
-- morning: [activity]
+- morning: [activity in destination]
 - afternoon: [activity]
 - evening: [activity]
-
 ### Day 2
 - morning: [activity]
 - afternoon: [activity]
 - evening: [activity]
-
-(continue for all ${days} days)
+(repeat for all ${days} days)
 
 ## Budget Breakdown
 - hotel: ₹[amount]
@@ -47,41 +33,41 @@ Trip details:
 - total: ₹[amount]
 
 ## Top Hotels
-- [Hotel Name] - ₹[price]/night - [area]
-- [Hotel Name] - ₹[price]/night - [area]
-- [Hotel Name] - ₹[price]/night - [area]
-- [Hotel Name] - ₹[price]/night - [area]
-- [Hotel Name] - ₹[price]/night - [area]
+- [name] - ₹[price]/night - [area]
+- [name] - ₹[price]/night - [area]
+- [name] - ₹[price]/night - [area]
+- [name] - ₹[price]/night - [area]
+- [name] - ₹[price]/night - [area]
 
 ## Top Restaurants
-- [Restaurant Name] - [specialty] - ₹[price range]
-- [Restaurant Name] - [specialty] - ₹[price range]
-- [Restaurant Name] - [specialty] - ₹[price range]
-- [Restaurant Name] - [specialty] - ₹[price range]
-- [Restaurant Name] - [specialty] - ₹[price range]
+- [name] - [specialty] - ₹[price range]
+- [name] - [specialty] - ₹[price range]
+- [name] - [specialty] - ₹[price range]
+- [name] - [specialty] - ₹[price range]
+- [name] - [specialty] - ₹[price range]
 
 ## Hidden Gems & Tips
-- [tip]
+- [tip about destination]
 - [tip]
 - [tip]
 - [tip]
 - [tip]
 
 ## Safety Tips
-- [tip]
+- [safety tip]
 - [tip]
 - [tip]
 - [tip]
 
 ## Weather & Clothing
-- weather: [brief description of weather at destination]
-- pack: light cotton, sunglasses, hat, flip-flops, light jacket, swimwear
+- weather: [current weather description for ${destination}]
+- pack: light cotton, sunglasses, hat, flip-flops, light jacket
 
 ## Documents Needed
 - Aadhaar card or government photo ID
 - student ID card
-- travel tickets (printed or digital)
-- driving license (if renting scooter)
+- travel tickets printed or digital
+- driving license if renting scooter
 - hotel booking confirmation
 
 ## First Aid Kit
@@ -93,89 +79,77 @@ Trip details:
 
 ## Electronics to Carry
 - mobile phone and charger
-- power bank (essential for travel days)
+- power bank essential for travel
 - earphones or headphones
-- camera (optional)
+- camera optional
 - universal travel adapter
 
 ## Local Guides & Helplines
-- tourist helpline: 1364 (24x7)
-- emergency: 112
+- tourist helpline: 1364 available 24x7
+- emergency number: 112
 - police: 100
 - women helpline: 1091
-- book guides via: state tourism website or hotel reception`;
+- book guides via state tourism website
 
-    const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        model: 'nvidia/nemotron-3-super-120b-a12b:free',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 3000
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://ai-travel-planner-flax.vercel.app',
-          'X-Title': 'AI Travel Planner'
-        },
-        timeout: 60000
+Rules: No bold text. No asterisks. Use only - for bullets. Keep lines under 12 words. Output only the sections above.`;
+
+    const callGemini = async (attempt = 1) => {
+      try {
+        const response = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          { contents: [{ parts: [{ text: prompt }] }] },
+          { headers: { 'content-type': 'application/json' }, timeout: 60000 }
+        );
+        const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Empty response from Gemini');
+        return text;
+      } catch (err) {
+        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:107`, err.message);
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+          return callGemini(attempt + 1);
+        }
+        throw err;
       }
-    );
+    };
 
-    const itinerary = response.data.choices[0].message.content;
+    const itinerary = await callGemini();
     res.json({ itinerary });
 
   } catch (err) {
-    console.error('Itinerary error: - itinerary.js:130', err.response?.data || err.message);
+    console.error('GENERATE ERROR: - itinerary.js:120', err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
 
+// ─── Ask AI Follow-up ─────────────────────────────────────────────────────────
 router.post('/ask', auth, async (req, res) => {
   try {
     const { question, tripDetails, itinerary } = req.body;
 
-    const prompt = `You are a helpful travel assistant for a student trip.
-Trip: ${tripDetails.source} to ${tripDetails.destination}
-Duration: ${tripDetails.days} days
-Budget: Rs.${tripDetails.budget} for ${tripDetails.groupSize} people
-Transport: ${tripDetails.transport}
+    const prompt = `Travel assistant for ${tripDetails.source} to ${tripDetails.destination} trip.
+Budget: ₹${tripDetails.budget}, ${tripDetails.days} days, ${tripDetails.groupSize} people.
 
-Existing itinerary summary: ${itinerary.substring(0, 1500)}
+User asks: "${question}"
 
-User question: "${question}"
-
-Answer in bullet points. If asked for hotels/restaurants/places give exactly 5 new ones not already mentioned.
-Format: - Name - details - price`;
+Answer with short bullet points using - only. No bold text. No asterisks. If asked for hotels or restaurants give 5 new ones in format: name - price - area.`;
 
     const response = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        model: 'nvidia/nemotron-3-super-120b-a12b:free',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 800
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://ai-travel-planner-flax.vercel.app',
-          'X-Title': 'AI Travel Planner'
-        },
-        timeout: 30000
-      }
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      { contents: [{ parts: [{ text: prompt }] }] },
+      { headers: { 'content-type': 'application/json' }, timeout: 30000 }
     );
 
-    const answer = response.data.choices[0].message.content;
+    const answer = response.data.candidates[0].content.parts[0].text;
     res.json({ answer });
 
   } catch (err) {
-    console.error('Ask error: - itinerary.js:174', err.message);
+    console.error('ASK ERROR: - itinerary.js:147', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
 
+// ─── Live Weather ─────────────────────────────────────────────────────────────
 router.get('/weather/:city', auth, async (req, res) => {
   try {
     const city = req.params.city;
@@ -194,7 +168,7 @@ router.get('/weather/:city', auth, async (req, res) => {
     }));
     res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:197', err.message);
+    console.error('Weather error: - itinerary.js:171', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
