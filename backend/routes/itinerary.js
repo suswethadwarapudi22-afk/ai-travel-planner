@@ -168,7 +168,7 @@ Answer with short bullet points using - only. No bold text. No asterisks. If ask
 
     const response = await axios({
       method: 'post',
-      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`,
       params: {
         key: process.env.GEMINI_API_KEY
       },
