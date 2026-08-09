@@ -8,60 +8,60 @@ router.post('/generate', auth, async (req, res) => {
   try {
     const { source, destination, budget, days, interests, groupSize, transport } = req.body;
 
-    const prompt = `Generate a travel itinerary. Output ONLY the sections below. No thinking. No explanation. No extra text. Start directly with ## Day-wise Itinerary.
+    const prompt = `Generate a travel itinerary. Start DIRECTLY with ## Day-wise Itinerary. No intro text. No thinking. No explanation before the first heading.
 
-Trip: ${source} to ${destination}, ${days} days, ₹${budget} for ${groupSize} people, ${transport}, interests: ${interests.join(', ')}
+Trip: ${source} to ${destination}, ${days} days, Rs.${budget} for ${groupSize} people, ${transport}, interests: ${interests.join(', ')}
 
-Output exactly these sections in this order:
+Use exactly these section headings in this order. Use - for bullets. No asterisks. No bold text. Short lines only.
 
 ## Day-wise Itinerary
 ### Day 1
-- morning: [activity in destination]
-- afternoon: [activity]
-- evening: [activity]
+- morning: activity
+- afternoon: activity  
+- evening: activity
 ### Day 2
-- morning: [activity]
-- afternoon: [activity]
-- evening: [activity]
-(repeat for all ${days} days)
+- morning: activity
+- afternoon: activity
+- evening: activity
+(add more days if needed)
 
 ## Budget Breakdown
-- hotel: ₹[amount]
-- food: ₹[amount]
-- transport: ₹[amount]
-- tickets: ₹[amount]
-- total: ₹[amount]
+- hotel: Rs.[amount]
+- food: Rs.[amount]
+- transport: Rs.[amount]
+- tickets: Rs.[amount]
+- total: Rs.[amount]
 
 ## Top Hotels
-- [name] - ₹[price]/night - [area]
-- [name] - ₹[price]/night - [area]
-- [name] - ₹[price]/night - [area]
-- [name] - ₹[price]/night - [area]
-- [name] - ₹[price]/night - [area]
+- Hotel Name - Rs.[price] per night - area name
+- Hotel Name - Rs.[price] per night - area name
+- Hotel Name - Rs.[price] per night - area name
+- Hotel Name - Rs.[price] per night - area name
+- Hotel Name - Rs.[price] per night - area name
 
 ## Top Restaurants
-- [name] - [specialty] - ₹[price range]
-- [name] - [specialty] - ₹[price range]
-- [name] - [specialty] - ₹[price range]
-- [name] - [specialty] - ₹[price range]
-- [name] - [specialty] - ₹[price range]
+- Restaurant Name - food type - price range
+- Restaurant Name - food type - price range
+- Restaurant Name - food type - price range
+- Restaurant Name - food type - price range
+- Restaurant Name - food type - price range
 
-## Hidden Gems & Tips
-- [tip about destination]
-- [tip]
-- [tip]
-- [tip]
-- [tip]
+## Hidden Gems and Tips
+- tip about destination
+- tip about destination
+- tip about destination
+- tip about destination
+- tip about destination
 
 ## Safety Tips
-- [safety tip]
-- [tip]
-- [tip]
-- [tip]
+- safety tip
+- safety tip
+- safety tip
+- safety tip
 
-## Weather & Clothing
-- weather: [current weather description for ${destination}]
-- pack: light cotton, sunglasses, hat, flip-flops, light jacket
+## Weather and Clothing
+- weather: description of weather at ${destination}
+- pack: list clothing items here
 
 ## Documents Needed
 - Aadhaar card or government photo ID
@@ -79,46 +79,64 @@ Output exactly these sections in this order:
 
 ## Electronics to Carry
 - mobile phone and charger
-- power bank essential for travel
-- earphones or headphones
+- power bank essential
+- earphones
 - camera optional
 - universal travel adapter
 
-## Local Guides & Helplines
-- tourist helpline: 1364 available 24x7
+## Local Guides and Helplines
+- tourist helpline: 1364 available 24 hours
 - emergency number: 112
 - police: 100
 - women helpline: 1091
-- book guides via state tourism website
-
-Rules: No bold text. No asterisks. Use only - for bullets. Keep lines under 12 words. Output only the sections above.`;
+- book guides via state tourism website`;
 
     const callGemini = async (attempt = 1) => {
       try {
-        const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
-{ 
-  contents: [{ parts: [{ text: prompt }] }],
-  generationConfig: {
-    temperature: 0.1,
-    maxOutputTokens: 8192
-  }
-},
-          { headers: { 'content-type': 'application/json' }, timeout: 60000 }
-        );
-      const parts = response.data?.candidates?.[0]?.content?.parts || [];
-// Join all parts but skip thinking parts
-let text = parts
-  .filter(p => p.text && !p.thought)
-  .map(p => p.text)
-  .join('\n');
-if (!text) throw new Error('Empty response from Gemini');
-// Remove any text before first ## heading
-const firstHeading = text.search(/^##\s/m);
-if (firstHeading > 0) text = text.slice(firstHeading);
-return text;
+        const response = await axios({
+          method: 'post',
+          url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+          params: {
+            key: process.env.GEMINI_API_KEY
+          },
+          data: {
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: prompt }]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 4096
+            }
+          },
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 60000
+        });
+
+        const parts = response.data?.candidates?.[0]?.content?.parts || [];
+        let text = parts
+          .filter(p => p.text && !p.thought)
+          .map(p => p.text)
+          .join('\n');
+
+        if (!text) throw new Error('Empty response from Gemini');
+
+        // Remove any thinking text before first ## heading
+        const firstHeading = text.search(/^##\s/m);
+        if (firstHeading > 0) {
+          text = text.slice(firstHeading);
+        }
+
+        return text;
       } catch (err) {
-        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:121`, err.message);
+        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:136`, err.message);
+        if (err.response) {
+          console.error('Response data: - itinerary.js:138', JSON.stringify(err.response.data));
+        }
         if (attempt < 3) {
           await new Promise((r) => setTimeout(r, 2000 * attempt));
           return callGemini(attempt + 1);
@@ -131,7 +149,7 @@ return text;
     res.json({ itinerary });
 
   } catch (err) {
-    console.error('GENERATE ERROR: - itinerary.js:134', err.message);
+    console.error('GENERATE ERROR: - itinerary.js:152', err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
@@ -141,24 +159,47 @@ router.post('/ask', auth, async (req, res) => {
   try {
     const { question, tripDetails, itinerary } = req.body;
 
-    const prompt = `Travel assistant for ${tripDetails.source} to ${tripDetails.destination} trip.
-Budget: ₹${tripDetails.budget}, ${tripDetails.days} days, ${tripDetails.groupSize} people.
+    const prompt = `You are a travel assistant. Answer this question about a trip from ${tripDetails.source} to ${tripDetails.destination}.
+Budget: Rs.${tripDetails.budget}, ${tripDetails.days} days, ${tripDetails.groupSize} people.
 
-User asks: "${question}"
+Question: ${question}
 
 Answer with short bullet points using - only. No bold text. No asterisks. If asked for hotels or restaurants give 5 new ones in format: name - price - area.`;
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }] }] },
-      { headers: { 'content-type': 'application/json' }, timeout: 30000 }
-    );
+    const response = await axios({
+      method: 'post',
+      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+      params: {
+        key: process.env.GEMINI_API_KEY
+      },
+      data: {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1024
+        }
+      },
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    });
 
-    const answer = response.data.candidates[0].content.parts[0].text;
+    const parts = response.data?.candidates?.[0]?.content?.parts || [];
+    const answer = parts
+      .filter(p => p.text && !p.thought)
+      .map(p => p.text)
+      .join('\n');
+
     res.json({ answer });
 
   } catch (err) {
-    console.error('ASK ERROR: - itinerary.js:161', err.message);
+    console.error('ASK ERROR: - itinerary.js:202', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
@@ -168,7 +209,16 @@ router.get('/weather/:city', auth, async (req, res) => {
   try {
     const city = req.params.city;
     const response = await axios.get(
-      `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)},IN&appid=${process.env.WEATHER_API_KEY}&units=metric&cnt=5`
+      `https://api.openweathermap.org/data/2.5/forecast`,
+      {
+        params: {
+          q: `${city},IN`,
+          appid: process.env.WEATHER_API_KEY,
+          units: 'metric',
+          cnt: 5
+        },
+        timeout: 10000
+      }
     );
     const data = response.data;
     const forecasts = data.list.map((item) => ({
@@ -182,7 +232,7 @@ router.get('/weather/:city', auth, async (req, res) => {
     }));
     res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:185', err.message);
+    console.error('Weather error: - itinerary.js:235', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
