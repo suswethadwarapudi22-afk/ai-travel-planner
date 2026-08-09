@@ -45,40 +45,28 @@ function getSec(sections, keywords) {
 }
 
 // ─── Parse budget - handles Rs.6000, ₹6000, Rs 6000, 6000 formats ─────────────
-function parseBudget(content) {
+
+  function parseBudget(content) {
   const lines = content.split('\n');
   const data = [];
   let total = 0;
-
   lines.forEach((line) => {
-    // Clean the line
     const cleaned = line.replace(/^[-*•]\s*/, '').trim();
     if (!cleaned || !cleaned.includes(':')) return;
-
     const colonIdx = cleaned.indexOf(':');
     const label = cleaned.slice(0, colonIdx).trim();
     const rest = cleaned.slice(colonIdx + 1).trim();
-
-    // Remove currency symbols and extract number
-    const numStr = rest
-      .replace(/Rs\.?/gi, '')
-      .replace(/₹/g, '')
-      .replace(/INR/gi, '')
-      .trim();
-
-    const numMatch = numStr.match(/^[\d,]+/);
+    const numStr = rest.replace(/Rs\.?/gi, '').replace(/₹/g, '').replace(/INR/gi, '').trim();
+    const numMatch = numStr.match(/[\d,]+/);
     if (!numMatch) return;
-
     const value = parseInt(numMatch[0].replace(/,/g, ''), 10);
     if (isNaN(value) || value <= 0) return;
-
     if (label.toLowerCase().includes('total')) {
       total = value;
     } else {
       data.push({ name: label, value });
     }
   });
-
   return { data, total };
 }
 
