@@ -51,7 +51,8 @@ function parseBudget(content) {
   const data = [];
   let total = 0;
   lines.forEach((line) => {
-    const match = line.match(/[-*]\s*([\w\s/&()]+?)[:\s]+[Rs.₹]*\s*([\d,]+)/);
+    // Match lines like: - hotel: Rs.6000 or - hotel: ₹6000 or - hotel: 6000
+    const match = line.match(/[-*]\s*([\w\s/&()]+?)\s*:\s*(?:Rs\.?|₹)?\s*([\d,]+)/i);
     if (match) {
       const label = match[1].trim().toLowerCase();
       const value = parseInt(match[2].replace(/,/g, ''), 10);
