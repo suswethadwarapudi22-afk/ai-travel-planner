@@ -6,24 +6,23 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 
 const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
-// ─── Clean AI response and extract only the actual content ────────────────────
+// ─── Clean AI response - remove thinking, keep only ## sections ───────────────
 function cleanAndParse(raw) {
-  // Remove thinking/reasoning text that appears before first ## heading
-  let text = raw;
+  if (!raw) return [];
 
-  // Find the LAST occurrence of ## Day-wise Itinerary (the actual content)
-  const match = text.match(/##\s*Day-wise Itinerary/i);
-  if (match) {
-    text = text.slice(match.index);
-  }
-
-  // Remove all bold/italic markers
-  text = text
+  // Remove bold/italic markers
+  let text = raw
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\*(.*?)\*/g, '$1')
     .replace(/__(.*?)__/g, '$1');
 
-  // Split into sections by ## headings
+  // Find first ## heading and start from there
+  const firstHeading = text.search(/^##\s/m);
+  if (firstHeading > 0) {
+    text = text.slice(firstHeading);
+  }
+
+  // Split by ## headings
   const parts = text.split(/\n(?=##\s)/).filter((s) => s.trim());
 
   return parts
@@ -38,20 +37,21 @@ function cleanAndParse(raw) {
     .filter(Boolean);
 }
 
-// ─── Find section by keywords ─────────────────────────────────────────────────
+// ─── Find section by keyword match ───────────────────────────────────────────
 function getSec(sections, keywords) {
   return sections.find((s) =>
     keywords.some((kw) => s.title.toLowerCase().includes(kw.toLowerCase()))
   );
 }
 
-// ─── Parse budget numbers ─────────────────────────────────────────────────────
- function parseBudget(content) {
+// ─── Parse budget - handles Rs.6000, ₹6000, Rs 6000, 6000 formats ─────────────
+function parseBudget(content) {
   const lines = content.split('\n');
   const data = [];
   let total = 0;
 
   lines.forEach((line) => {
+    // Clean the line
     const cleaned = line.replace(/^[-*•]\s*/, '').trim();
     if (!cleaned || !cleaned.includes(':')) return;
 
@@ -59,8 +59,14 @@ function getSec(sections, keywords) {
     const label = cleaned.slice(0, colonIdx).trim();
     const rest = cleaned.slice(colonIdx + 1).trim();
 
-    // Extract number - handles Rs.20000, Rs 20000, ₹20000, 20000
-    const numMatch = rest.replace(/Rs\.?/gi, '').replace(/₹/g, '').match(/[\d,]+/);
+    // Remove currency symbols and extract number
+    const numStr = rest
+      .replace(/Rs\.?/gi, '')
+      .replace(/₹/g, '')
+      .replace(/INR/gi, '')
+      .trim();
+
+    const numMatch = numStr.match(/^[\d,]+/);
     if (!numMatch) return;
 
     const value = parseInt(numMatch[0].replace(/,/g, ''), 10);
@@ -73,11 +79,10 @@ function getSec(sections, keywords) {
     }
   });
 
-  console.log('Budget data:', data, 'Total:', total);
   return { data, total };
 }
 
-// ─── Colored Section Card ─────────────────────────────────────────────────────
+// ─── Colored collapsible section card ────────────────────────────────────────
 function SectionCard({ icon, title, headerColor, borderColor, bgColor, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -87,10 +92,10 @@ function SectionCard({ icon, title, headerColor, borderColor, bgColor, children,
         className={`${headerColor} w-full px-5 py-3 flex items-center justify-between gap-3 text-left`}
       >
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{icon}</span>
+          <span className="text-xl">{icon}</span>
           <h3 className="text-white font-bold text-base">{title}</h3>
         </div>
-        <span className="text-white text-xl">{open ? '−' : '+'}</span>
+        <span className="text-white text-xl font-bold">{open ? '−' : '+'}</span>
       </button>
       {open && (
         <div className={`${bgColor} p-5`}>{children}</div>
@@ -99,13 +104,13 @@ function SectionCard({ icon, title, headerColor, borderColor, bgColor, children,
   );
 }
 
-// ─── Markdown renderer ────────────────────────────────────────────────────────
+// ─── Markdown renderer with cleaning ─────────────────────────────────────────
 function MDContent({ content }) {
-  const cleaned = content
+  const cleaned = (content || '')
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\*(.*?)\*/g, '$1');
   return (
-    <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-h3:text-base prose-h3:text-gray-800 prose-h3:mt-3 prose-h3:mb-1 prose-li:my-1 prose-ul:my-2 prose-strong:text-gray-900 prose-p:my-1">
+    <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-h3:text-sm prose-h3:text-gray-800 prose-h3:mt-3 prose-h3:mb-1 prose-li:my-1 prose-ul:my-2 prose-p:my-1">
       <ReactMarkdown>{cleaned}</ReactMarkdown>
     </div>
   );
@@ -150,38 +155,42 @@ function Itinerary() {
 
   useEffect(() => {
     if (!tripDetails?.destination) return;
+    // Load weather
     setWeatherLoading(true);
     getWeather(normalizeCity(tripDetails.destination))
       .then((res) => setWeather(res.data))
       .catch(() => setWeather(null))
       .finally(() => setWeatherLoading(false));
-    // load packing list
+    // Load packing list
     const saved = localStorage.getItem(storageKey);
-    if (saved) setPackingList(JSON.parse(saved));
+    if (saved) {
+      try { setPackingList(JSON.parse(saved)); } catch (e) { }
+    }
     // eslint-disable-next-line
   }, []);
 
   if (!state) { navigate('/dashboard'); return null; }
 
-  // Parse sections
+  // Parse sections from AI response
   const sections = cleanAndParse(itinerary);
 
-  // Match sections by keywords
-  const daySection     = getSec(sections, ['day-wise', 'day wise', 'itinerary', 'trip plan', 'daily']);
-  const hotelSection   = getSec(sections, ['hotel', 'stay', 'accommodation', 'hostel']);
-  const foodSection    = getSec(sections, ['restaurant', 'food', 'dining', 'eat']);
-  const budgetSection  = getSec(sections, ['budget', 'cost', 'expense', 'breakdown']);
-  const hiddenSection  = getSec(sections, ['hidden', 'gem', 'tip', 'local tip', 'places to visit', 'sightseeing']);
-  const safetySection  = getSec(sections, ['safety', 'safe', 'precaution']);
-  const weatherSection = getSec(sections, ['weather', 'clothing', 'cloth', 'pack', 'wear']);
-  const docsSection    = getSec(sections, ['document', 'id proof', 'documents needed']);
-  const firstAidSection = getSec(sections, ['first aid', 'medical', 'medicine', 'health', 'aid kit']);
-  const elecSection    = getSec(sections, ['electronic', 'gadget', 'device', 'charger', 'electronics']);
-  const guidesSection  = getSec(sections, ['guide', 'helpline', 'emergency', 'contact', 'local guide']);
-  const transportSection = getSec(sections, ['transport', 'travel detail', 'how to reach', 'getting there']);
+  // Match each section by keywords
+  const daySection      = getSec(sections, ['day-wise', 'day wise', 'itinerary', 'daily', 'trip plan']);
+  const budgetSection   = getSec(sections, ['budget', 'cost', 'expense', 'breakdown']);
+  const hotelSection    = getSec(sections, ['hotel', 'accommodation', 'hostel', 'stay']);
+  const foodSection     = getSec(sections, ['restaurant', 'food', 'dining', 'eat']);
+  const hiddenSection   = getSec(sections, ['hidden', 'gem', 'tip', 'places to visit', 'sightseeing', 'attractions']);
+  const safetySection   = getSec(sections, ['safety', 'safe', 'precaution']);
+  const weatherSection  = getSec(sections, ['weather', 'clothing', 'cloth', 'pack', 'wear']);
+  const docsSection     = getSec(sections, ['document', 'documents needed', 'id proof']);
+  const firstAidSection = getSec(sections, ['first aid', 'medical', 'medicine', 'aid kit']);
+  const elecSection     = getSec(sections, ['electronic', 'gadget', 'device', 'charger', 'electronics']);
+  const guidesSection   = getSec(sections, ['guide', 'helpline', 'emergency', 'contact']);
 
+  // Budget chart
   const { data: budgetData, total: budgetTotal } = budgetSection
-    ? parseBudget(budgetSection.content) : { data: [], total: 0 };
+    ? parseBudget(budgetSection.content)
+    : { data: [], total: 0 };
   const userBudget = Number(tripDetails?.budget || 0);
 
   const handleSave = async () => {
@@ -203,7 +212,9 @@ function Itinerary() {
     setAsking(false);
   };
 
-  const persistPacking = (list) => localStorage.setItem(storageKey, JSON.stringify(list));
+  const persistPacking = (list) => {
+    try { localStorage.setItem(storageKey, JSON.stringify(list)); } catch (e) { }
+  };
 
   const toggleItem = (cat, id) => {
     setPackingList((prev) => {
@@ -239,7 +250,7 @@ function Itinerary() {
     <div className="min-h-screen bg-gray-100 py-6 px-4">
       <div className="max-w-2xl mx-auto">
 
-        {/* ── HEADER ── */}
+        {/* HEADER */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-5 mb-5 text-white shadow-lg">
           <div className="flex justify-between items-start flex-wrap gap-3">
             <div>
@@ -262,12 +273,13 @@ function Itinerary() {
               </button>
             </div>
           </div>
-          <button onClick={() => navigate('/dashboard')} className="mt-3 text-blue-200 text-sm hover:text-white">
+          <button onClick={() => navigate('/dashboard')}
+            className="mt-3 text-blue-200 text-sm hover:text-white">
             ← Back to Dashboard
           </button>
         </div>
 
-        {/* ── 1. DAY-WISE ITINERARY ── */}
+        {/* 1. DAY-WISE ITINERARY */}
         <SectionCard icon="📅" title="Day-wise Itinerary"
           headerColor="bg-blue-600" borderColor="border-blue-200" bgColor="bg-blue-50" defaultOpen={true}>
           {daySection
@@ -275,32 +287,57 @@ function Itinerary() {
             : <MDContent content={itinerary} />}
         </SectionCard>
 
-        {/* ── 2. ROUTE MAP ── */}
+        {/* 2. BUDGET BREAKDOWN */}
+        <SectionCard icon="💰" title="Budget Breakdown"
+          headerColor="bg-green-600" borderColor="border-green-200" bgColor="bg-green-50">
+          {budgetData.length > 0 ? (
+            <div>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={budgetData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="45%"
+                    outerRadius={85}
+                    labelLine={false}
+                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                  >
+                    {budgetData.map((entry, idx) => (
+                      <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v, name) => [`Rs.${v.toLocaleString()}`, name]} />
+                  <Legend
+                    layout="horizontal"
+                    verticalAlign="bottom"
+                    formatter={(value, entry) => `${value}: Rs.${entry.payload.value}`}
+                    wrapperStyle={{ fontSize: '12px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className={`mt-3 rounded-xl p-3 text-sm font-semibold text-center
+                ${budgetTotal > userBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                {budgetTotal > userBudget
+                  ? `⚠️ Estimated Rs.${budgetTotal} exceeds budget by Rs.${budgetTotal - userBudget}`
+                  : `✅ Estimated Rs.${budgetTotal} — Rs.${userBudget - budgetTotal} left to spare!`}
+              </div>
+            </div>
+          ) : (
+            <MDContent content={budgetSection?.content || ''} />
+          )}
+        </SectionCard>
+
+        {/* 3. ROUTE MAP */}
         <SectionCard icon="🗺️" title="Route & Navigation"
           headerColor="bg-gray-700" borderColor="border-gray-200" bgColor="bg-gray-50">
           <iframe title="route-map" width="100%" height="260"
             style={{ border: 0, borderRadius: '12px' }} loading="lazy" allowFullScreen
             src={`https://maps.google.com/maps?saddr=${encodeURIComponent(tripDetails.source)}&daddr=${encodeURIComponent(tripDetails.destination)}&output=embed`} />
-          {transportSection && <div className="mt-4"><MDContent content={transportSection.content} /></div>}
         </SectionCard>
 
-        {/* ── 3. FOOD & RESTAURANTS ── */}
-        {foodSection && (
-          <SectionCard icon="🍽️" title="Food & Restaurants"
-            headerColor="bg-orange-500" borderColor="border-orange-200" bgColor="bg-orange-50">
-            <MDContent content={foodSection.content} />
-          </SectionCard>
-        )}
-
-        {/* ── 4. PLACES TO VISIT ── */}
-        {hiddenSection && (
-          <SectionCard icon="🏖️" title="Places to Visit & Hidden Gems"
-            headerColor="bg-teal-600" borderColor="border-teal-200" bgColor="bg-teal-50">
-            <MDContent content={hiddenSection.content} />
-          </SectionCard>
-        )}
-
-        {/* ── 5. HOTELS ── */}
+        {/* 4. HOTELS */}
         {hotelSection && (
           <SectionCard icon="🏨" title="Hotels & Accommodation"
             headerColor="bg-purple-600" borderColor="border-purple-200" bgColor="bg-purple-50">
@@ -308,48 +345,23 @@ function Itinerary() {
           </SectionCard>
         )}
 
-        {/* ── 6. BUDGET BREAKDOWN ── */}
-        {budgetSection && (
-          <SectionCard icon="💰" title="Budget Breakdown"
-            headerColor="bg-green-600" borderColor="border-green-200" bgColor="bg-green-50">
-            {budgetData.length > 0 ? (
-  <ResponsiveContainer width="100%" height={240}>
-    <PieChart>
-      <Pie
-        data={budgetData}
-        dataKey="value"
-        nameKey="name"
-        cx="50%"
-        cy="45%"
-        outerRadius={80}
-        labelLine={false}
-        label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
-      >
-        {budgetData.map((_, idx) => (
-          <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-        ))}
-      </Pie>
-      <Tooltip formatter={(v, name) => [`Rs.${v}`, name]} />
-      <Legend wrapperStyle={{ fontSize: '12px' }} />
-    </PieChart>
-  </ResponsiveContainer>
-) : (
-  <p className="text-sm text-gray-400 text-center py-4">Loading chart...</p>
-)}
-                
-            <MDContent content={budgetSection.content} />
-            {budgetTotal > 0 && (
-              <div className={`mt-3 rounded-xl p-3 text-sm font-semibold text-center
-                ${budgetTotal > userBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                {budgetTotal > userBudget
-                  ? `⚠️ Estimated ₹${budgetTotal} exceeds budget by ₹${budgetTotal - userBudget}`
-                  : `✅ Estimated ₹${budgetTotal} — ₹${userBudget - budgetTotal} left to spare!`}
-              </div>
-            )}
+        {/* 5. RESTAURANTS */}
+        {foodSection && (
+          <SectionCard icon="🍽️" title="Food & Restaurants"
+            headerColor="bg-orange-500" borderColor="border-orange-200" bgColor="bg-orange-50">
+            <MDContent content={foodSection.content} />
           </SectionCard>
         )}
 
-        {/* ── 7. WEATHER ── */}
+        {/* 6. PLACES TO VISIT */}
+        {hiddenSection && (
+          <SectionCard icon="🏖️" title="Places to Visit & Hidden Gems"
+            headerColor="bg-teal-600" borderColor="border-teal-200" bgColor="bg-teal-50">
+            <MDContent content={hiddenSection.content} />
+          </SectionCard>
+        )}
+
+        {/* 7. WEATHER FORECAST */}
         <SectionCard icon="🌤️" title={`Weather Forecast — ${tripDetails.destination}`}
           headerColor="bg-yellow-500" borderColor="border-yellow-200" bgColor="bg-yellow-50">
           {weatherLoading && <p className="text-sm text-gray-500">Fetching weather...</p>}
@@ -378,8 +390,8 @@ function Itinerary() {
           {weatherSection && <div className="mt-3"><MDContent content={weatherSection.content} /></div>}
         </SectionCard>
 
-        {/* ── 8. CLOTHES & PACKING ── */}
-        <SectionCard icon="👕" title="Clothes & Packing"
+        {/* 8. CLOTHES & PACKING */}
+        <SectionCard icon="👕" title="Clothes & Packing Checklist"
           headerColor="bg-pink-500" borderColor="border-pink-200" bgColor="bg-pink-50">
           {weatherSection && <MDContent content={weatherSection.content} />}
           <div className="mt-4">
@@ -397,12 +409,14 @@ function Itinerary() {
                 <div className="space-y-1 mb-2">
                   {items.map((item) => (
                     <div key={item.id} className="flex items-center gap-2">
-                      <input type="checkbox" checked={item.checked} onChange={() => toggleItem(cat, item.id)}
+                      <input type="checkbox" checked={item.checked}
+                        onChange={() => toggleItem(cat, item.id)}
                         className="w-4 h-4 accent-pink-500 flex-shrink-0" />
                       <span className={`text-sm flex-1 ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}>
                         {item.text}
                       </span>
-                      <button onClick={() => deleteItem(cat, item.id)} className="text-gray-300 hover:text-red-500 text-sm">✕</button>
+                      <button onClick={() => deleteItem(cat, item.id)}
+                        className="text-gray-300 hover:text-red-500 text-sm">✕</button>
                     </div>
                   ))}
                   {items.length === 0 && <p className="text-xs text-gray-400 italic">No items yet</p>}
@@ -414,14 +428,16 @@ function Itinerary() {
                     onKeyDown={(e) => e.key === 'Enter' && addItem(cat)}
                     className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 bg-white" />
                   <button onClick={() => addItem(cat)}
-                    className="bg-pink-100 text-pink-600 px-3 rounded-lg text-sm font-medium hover:bg-pink-200">+ Add</button>
+                    className="bg-pink-100 text-pink-600 px-3 rounded-lg text-sm font-medium hover:bg-pink-200">
+                    + Add
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         </SectionCard>
 
-        {/* ── 9. DOCUMENTS ── */}
+        {/* 9. DOCUMENTS */}
         {docsSection && (
           <SectionCard icon="📄" title="Documents Required"
             headerColor="bg-blue-500" borderColor="border-blue-200" bgColor="bg-blue-50">
@@ -429,7 +445,7 @@ function Itinerary() {
           </SectionCard>
         )}
 
-        {/* ── 10. ELECTRONICS ── */}
+        {/* 10. ELECTRONICS */}
         {elecSection && (
           <SectionCard icon="🔌" title="Electronics Checklist"
             headerColor="bg-indigo-600" borderColor="border-indigo-200" bgColor="bg-indigo-50">
@@ -437,7 +453,7 @@ function Itinerary() {
           </SectionCard>
         )}
 
-        {/* ── 11. SAFETY ── */}
+        {/* 11. SAFETY TIPS */}
         {safetySection && (
           <SectionCard icon="🛡️" title="Safety Tips"
             headerColor="bg-red-600" borderColor="border-red-200" bgColor="bg-red-50">
@@ -445,7 +461,7 @@ function Itinerary() {
           </SectionCard>
         )}
 
-        {/* ── 12. LOCAL GUIDES ── */}
+        {/* 12. LOCAL GUIDES */}
         {guidesSection && (
           <SectionCard icon="📞" title="Local Guides & Helplines"
             headerColor="bg-teal-700" borderColor="border-teal-200" bgColor="bg-teal-50">
@@ -453,7 +469,7 @@ function Itinerary() {
           </SectionCard>
         )}
 
-        {/* ── ASK AI ── */}
+        {/* ASK AI */}
         <SectionCard icon="💬" title="Ask AI — Get More Info"
           headerColor="bg-purple-600" borderColor="border-purple-200" bgColor="bg-purple-50">
           <div className="flex gap-2 mb-3">
