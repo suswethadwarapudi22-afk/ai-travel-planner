@@ -17,7 +17,7 @@ Use exactly these section headings in this order. Use - for bullets. No asterisk
 ## Day-wise Itinerary
 ### Day 1
 - morning: activity
-- afternoon: activity  
+- afternoon: activity
 - evening: activity
 ### Day 2
 - morning: activity
@@ -95,7 +95,7 @@ Use exactly these section headings in this order. Use - for bullets. No asterisk
       try {
         const response = await axios({
           method: 'post',
-          url: `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-exp:generateContent`,
+          url: `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent`,
           params: {
             key: process.env.GEMINI_API_KEY
           },
@@ -157,7 +157,7 @@ Use exactly these section headings in this order. Use - for bullets. No asterisk
 // ─── Ask AI Follow-up ─────────────────────────────────────────────────────────
 router.post('/ask', auth, async (req, res) => {
   try {
-    const { question, tripDetails, itinerary } = req.body;
+    const { question, tripDetails } = req.body;
 
     const prompt = `You are a travel assistant. Answer this question about a trip from ${tripDetails.source} to ${tripDetails.destination}.
 Budget: Rs.${tripDetails.budget}, ${tripDetails.days} days, ${tripDetails.groupSize} people.
@@ -168,7 +168,7 @@ Answer with short bullet points using - only. No bold text. No asterisks. If ask
 
     const response = await axios({
       method: 'post',
-      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`,
+      url: `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent`,
       params: {
         key: process.env.GEMINI_API_KEY
       },
