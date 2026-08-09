@@ -50,21 +50,36 @@ function parseBudget(content) {
   const lines = content.split('\n');
   const data = [];
   let total = 0;
+
   lines.forEach((line) => {
-    // Match lines like: - hotel: Rs.6000 or - hotel: ₹6000 or - hotel: 6000
-    const match = line.match(/[-*]\s*([\w\s/&()]+?)\s*:\s*(?:Rs\.?|₹)?\s*([\d,]+)/i);
-    if (match) {
-      const label = match[1].trim().toLowerCase();
-      const value = parseInt(match[2].replace(/,/g, ''), 10);
-      if (label.includes('total')) {
-        total = value;
-      } else if (!isNaN(value) && value > 0) {
-        data.push({ name: match[1].trim(), value });
-      }
+    // Remove bullet points and clean line
+    const cleaned = line.replace(/^[-*•]\s*/, '').trim();
+    if (!cleaned) return;
+
+    // Find the label (before colon) and number (any sequence of digits)
+    const colonIdx = cleaned.indexOf(':');
+    if (colonIdx === -1) return;
+
+    const label = cleaned.slice(0, colonIdx).trim();
+    const rest = cleaned.slice(colonIdx + 1).trim();
+
+    // Extract any number from the rest of the string
+    const numMatch = rest.match(/([\d,]+)/);
+    if (!numMatch) return;
+
+    const value = parseInt(numMatch[1].replace(/,/g, ''), 10);
+    if (isNaN(value) || value <= 0) return;
+
+    if (label.toLowerCase().includes('total')) {
+      total = value;
+    } else {
+      data.push({ name: label, value });
     }
   });
+
   return { data, total };
 }
+ 
 
 // ─── Colored Section Card ─────────────────────────────────────────────────────
 function SectionCard({ icon, title, headerColor, borderColor, bgColor, children, defaultOpen = false }) {
