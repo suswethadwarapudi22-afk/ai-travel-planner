@@ -97,14 +97,11 @@ Rules: No bold text. No asterisks. Use only - for bullets. Keep lines under 12 w
       try {
         const response = await axios.post(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
-  { 
+{ 
   contents: [{ parts: [{ text: prompt }] }],
   generationConfig: {
     temperature: 0.1,
     maxOutputTokens: 8192
-  },
-  thinkingConfig: {
-    thinkingBudget: 0
   }
 },
           { headers: { 'content-type': 'application/json' }, timeout: 60000 }
@@ -121,7 +118,7 @@ const firstHeading = text.search(/^##\s/m);
 if (firstHeading > 0) text = text.slice(firstHeading);
 return text;
       } catch (err) {
-        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:124`, err.message);
+        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:121`, err.message);
         if (attempt < 3) {
           await new Promise((r) => setTimeout(r, 2000 * attempt));
           return callGemini(attempt + 1);
@@ -134,7 +131,7 @@ return text;
     res.json({ itinerary });
 
   } catch (err) {
-    console.error('GENERATE ERROR: - itinerary.js:137', err.message);
+    console.error('GENERATE ERROR: - itinerary.js:134', err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
@@ -161,7 +158,7 @@ Answer with short bullet points using - only. No bold text. No asterisks. If ask
     res.json({ answer });
 
   } catch (err) {
-    console.error('ASK ERROR: - itinerary.js:164', err.message);
+    console.error('ASK ERROR: - itinerary.js:161', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
@@ -185,7 +182,7 @@ router.get('/weather/:city', auth, async (req, res) => {
     }));
     res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:188', err.message);
+    console.error('Weather error: - itinerary.js:185', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
