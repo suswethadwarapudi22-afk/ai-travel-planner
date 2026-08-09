@@ -95,7 +95,7 @@ Use exactly these section headings in this order. Use - for bullets. No asterisk
       try {
         const response = await axios({
           method: 'post',
-          url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent`,
+          url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flassh-exp:generateContent`,
           params: {
             key: process.env.GEMINI_API_KEY
           },
