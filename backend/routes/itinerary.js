@@ -97,14 +97,19 @@ Rules: No bold text. No asterisks. Use only - for bullets. Keep lines under 12 w
       try {
         const response = await axios.post(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          { contents: [{ parts: [{ text: prompt }] }] },
+          { 
+  contents: [{ parts: [{ text: prompt }] }],
+  generationConfig: {
+    temperature: 0.1
+  }
+},
           { headers: { 'content-type': 'application/json' }, timeout: 60000 }
         );
         const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error('Empty response from Gemini');
         return text;
       } catch (err) {
-        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:107`, err.message);
+        console.error(`Gemini attempt ${attempt} failed: - itinerary.js:112`, err.message);
         if (attempt < 3) {
           await new Promise((r) => setTimeout(r, 2000 * attempt));
           return callGemini(attempt + 1);
@@ -117,7 +122,7 @@ Rules: No bold text. No asterisks. Use only - for bullets. Keep lines under 12 w
     res.json({ itinerary });
 
   } catch (err) {
-    console.error('GENERATE ERROR: - itinerary.js:120', err.message);
+    console.error('GENERATE ERROR: - itinerary.js:125', err.message);
     res.status(500).json({ message: 'Failed to generate itinerary' });
   }
 });
@@ -144,7 +149,7 @@ Answer with short bullet points using - only. No bold text. No asterisks. If ask
     res.json({ answer });
 
   } catch (err) {
-    console.error('ASK ERROR: - itinerary.js:147', err.message);
+    console.error('ASK ERROR: - itinerary.js:152', err.message);
     res.status(500).json({ message: 'Failed to get answer' });
   }
 });
@@ -168,7 +173,7 @@ router.get('/weather/:city', auth, async (req, res) => {
     }));
     res.json({ city: data.city.name, country: data.city.country, forecasts });
   } catch (err) {
-    console.error('Weather error: - itinerary.js:171', err.message);
+    console.error('Weather error: - itinerary.js:176', err.message);
     res.status(500).json({ message: 'Could not fetch weather data' });
   }
 });
