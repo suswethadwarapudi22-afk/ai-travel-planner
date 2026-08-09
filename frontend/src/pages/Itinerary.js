@@ -46,28 +46,24 @@ function getSec(sections, keywords) {
 }
 
 // ─── Parse budget numbers ─────────────────────────────────────────────────────
-function parseBudget(content) {
+ function parseBudget(content) {
   const lines = content.split('\n');
   const data = [];
   let total = 0;
 
   lines.forEach((line) => {
-    // Remove bullet points and clean line
     const cleaned = line.replace(/^[-*•]\s*/, '').trim();
-    if (!cleaned) return;
+    if (!cleaned || !cleaned.includes(':')) return;
 
-    // Find the label (before colon) and number (any sequence of digits)
     const colonIdx = cleaned.indexOf(':');
-    if (colonIdx === -1) return;
-
     const label = cleaned.slice(0, colonIdx).trim();
     const rest = cleaned.slice(colonIdx + 1).trim();
 
-    // Extract any number from the rest of the string
-    const numMatch = rest.match(/([\d,]+)/);
+    // Extract number - handles Rs.20000, Rs 20000, ₹20000, 20000
+    const numMatch = rest.replace(/Rs\.?/gi, '').replace(/₹/g, '').match(/[\d,]+/);
     if (!numMatch) return;
 
-    const value = parseInt(numMatch[1].replace(/,/g, ''), 10);
+    const value = parseInt(numMatch[0].replace(/,/g, ''), 10);
     if (isNaN(value) || value <= 0) return;
 
     if (label.toLowerCase().includes('total')) {
@@ -77,9 +73,9 @@ function parseBudget(content) {
     }
   });
 
+  console.log('Budget data:', data, 'Total:', total);
   return { data, total };
 }
- 
 
 // ─── Colored Section Card ─────────────────────────────────────────────────────
 function SectionCard({ icon, title, headerColor, borderColor, bgColor, children, defaultOpen = false }) {
@@ -316,19 +312,31 @@ function Itinerary() {
         {budgetSection && (
           <SectionCard icon="💰" title="Budget Breakdown"
             headerColor="bg-green-600" borderColor="border-green-200" bgColor="bg-green-50">
-            {budgetData.length > 0 && (
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie data={budgetData} dataKey="value" nameKey="name"
-                    cx="50%" cy="45%" outerRadius={80} labelLine={false}
-                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}>
-                    {budgetData.map((_, idx) => <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => `₹${v}`} />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
+            {budgetData.length > 0 ? (
+  <ResponsiveContainer width="100%" height={240}>
+    <PieChart>
+      <Pie
+        data={budgetData}
+        dataKey="value"
+        nameKey="name"
+        cx="50%"
+        cy="45%"
+        outerRadius={80}
+        labelLine={false}
+        label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+      >
+        {budgetData.map((_, idx) => (
+          <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+        ))}
+      </Pie>
+      <Tooltip formatter={(v, name) => [`Rs.${v}`, name]} />
+      <Legend wrapperStyle={{ fontSize: '12px' }} />
+    </PieChart>
+  </ResponsiveContainer>
+) : (
+  <p className="text-sm text-gray-400 text-center py-4">Loading chart...</p>
+)}
+                
             <MDContent content={budgetSection.content} />
             {budgetTotal > 0 && (
               <div className={`mt-3 rounded-xl p-3 text-sm font-semibold text-center
