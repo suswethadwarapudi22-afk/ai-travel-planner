@@ -96,7 +96,7 @@ Rules: No bold text. No asterisks. Use only - for bullets. Keep lines under 12 w
     const callGemini = async (attempt = 1) => {
       try {
         const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
   { 
   contents: [{ parts: [{ text: prompt }] }],
   generationConfig: {
