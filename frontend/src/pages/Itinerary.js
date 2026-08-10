@@ -45,28 +45,37 @@ function getSec(sections, keywords) {
 }
 
 // ─── Parse budget - handles Rs.6000, ₹6000, Rs 6000, 6000 formats ─────────────
-
-  function parseBudget(content) {
-  const lines = content.split('\n');
+function parseBudget(content) {
   const data = [];
   let total = 0;
+  const lines = content.split('\n');
+  
   lines.forEach((line) => {
-    const cleaned = line.replace(/^[-*•]\s*/, '').trim();
-    if (!cleaned || !cleaned.includes(':')) return;
-    const colonIdx = cleaned.indexOf(':');
-    const label = cleaned.slice(0, colonIdx).trim();
-    const rest = cleaned.slice(colonIdx + 1).trim();
-    const numStr = rest.replace(/Rs\.?/gi, '').replace(/₹/g, '').replace(/INR/gi, '').trim();
-    const numMatch = numStr.match(/[\d,]+/);
-    if (!numMatch) return;
-    const value = parseInt(numMatch[0].replace(/,/g, ''), 10);
-    if (isNaN(value) || value <= 0) return;
+    // Remove bullet points
+    const clean = line.replace(/^[-*•\s]+/, '').trim();
+    if (!clean) return;
+    
+    // Split on colon
+    const parts = clean.split(':');
+    if (parts.length < 2) return;
+    
+    const label = parts[0].trim();
+    const valueStr = parts.slice(1).join(':').trim();
+    
+    // Extract digits only
+    const digits = valueStr.replace(/[^\d]/g, '');
+    if (!digits) return;
+    
+    const value = parseInt(digits, 10);
+    if (!value || value <= 0) return;
+    
     if (label.toLowerCase().includes('total')) {
       total = value;
     } else {
       data.push({ name: label, value });
     }
   });
+  
   return { data, total };
 }
 
@@ -278,24 +287,25 @@ function Itinerary() {
         {/* 2. BUDGET BREAKDOWN */}
         <SectionCard icon="💰" title="Budget Breakdown"
           headerColor="bg-green-600" borderColor="border-green-200" bgColor="bg-green-50">
-          {budgetData.length > 0 ? (
-            <div>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={budgetData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="45%"
-                    outerRadius={85}
-                    labelLine={false}
-                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                  >
-                    {budgetData.map((entry, idx) => (
-                      <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
+          
+                  {budgetData.length > 0 && (
+              <div style={{ width: '100%', height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={budgetData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="45%"
+                      outerRadius={85}
+                      labelLine={false}
+                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                    >
+                      {budgetData.map((entry, idx) => (
+                        <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
                   <Tooltip formatter={(v, name) => [`Rs.${v.toLocaleString()}`, name]} />
                   <Legend
                     layout="horizontal"
