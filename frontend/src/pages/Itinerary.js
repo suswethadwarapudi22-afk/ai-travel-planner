@@ -282,14 +282,13 @@ function Itinerary() {
           {daySection
             ? <MDContent content={daySection.content} />
             : <MDContent content={itinerary} />}
-        </SectionCard>
-
-        {/* 2. BUDGET BREAKDOWN */}
+        </SectionCard>            
+       {/* 2. BUDGET BREAKDOWN */}
         <SectionCard icon="💰" title="Budget Breakdown"
           headerColor="bg-green-600" borderColor="border-green-200" bgColor="bg-green-50">
-          
-                  {budgetData.length > 0 && (
-              <div style={{ width: '100%', height: 260 }}>
+          {budgetData.length > 0 ? (
+            <div>
+              <div style={{ width: '100%', height: '260px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -306,26 +305,29 @@ function Itinerary() {
                         <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                       ))}
                     </Pie>
-                  <Tooltip formatter={(v, name) => [`Rs.${v.toLocaleString()}`, name]} />
-                  <Legend
-                    layout="horizontal"
-                    verticalAlign="bottom"
-                    formatter={(value, entry) => `${value}: Rs.${entry.payload.value}`}
-                    wrapperStyle={{ fontSize: '12px' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className={`mt-3 rounded-xl p-3 text-sm font-semibold text-center
-                ${budgetTotal > userBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    <Tooltip formatter={(v, name) => [`Rs.${v.toLocaleString()}`, name]} />
+                    <Legend
+                      layout="horizontal"
+                      verticalAlign="bottom"
+                      formatter={(value, entry) => `${value}: Rs.${entry.payload.value}`}
+                      wrapperStyle={{ fontSize: '12px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className={`mt-3 rounded-xl p-3 text-sm font-semibold text-center ${budgetTotal > userBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                 {budgetTotal > userBudget
                   ? `⚠️ Estimated Rs.${budgetTotal} exceeds budget by Rs.${budgetTotal - userBudget}`
-                  : `✅ Estimated Rs.${budgetTotal} — Rs.${userBudget - budgetTotal} left to spare!`}
+                  : `✅ Estimated Rs.${budgetTotal} fits within budget! Rs.${userBudget - budgetTotal} to spare`}
+              </div>
+              <div className="mt-3">
+                <MDContent content={budgetSection?.content || ''} />
               </div>
             </div>
           ) : (
             <MDContent content={budgetSection?.content || ''} />
           )}
-        </SectionCard>
+        </SectionCard>     
 
         {/* 3. ROUTE MAP */}
         <SectionCard icon="🗺️" title="Route & Navigation"
